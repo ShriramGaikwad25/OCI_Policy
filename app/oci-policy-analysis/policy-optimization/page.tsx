@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -562,10 +563,11 @@ export default function OciPolicyOptimizationPage() {
                             <div className="overflow-x-auto rounded-md border border-blue-100 bg-white shadow-sm">
                               <table className="w-full table-fixed text-sm border-collapse">
                                 <colgroup>
-                                  <col className="w-[30%]" />
+                                  <col className="w-[26%]" />
                                   <col className="w-[12%]" />
-                                  <col className="w-[28%]" />
-                                  <col className="w-[30%]" />
+                                  <col className="w-[26%]" />
+                                  <col className="w-[26%]" />
+                                  <col className="w-12" />
                                 </colgroup>
                                 <thead>
                                   <tr>
@@ -580,6 +582,9 @@ export default function OciPolicyOptimizationPage() {
                                     </th>
                                     <th scope="col" className={INNER_TH}>
                                       Resource
+                                    </th>
+                                    <th scope="col" className={`${INNER_TH} text-center`}>
+                                      <span className="sr-only">Details</span>
                                     </th>
                                   </tr>
                                 </thead>
@@ -615,6 +620,20 @@ export default function OciPolicyOptimizationPage() {
                                             value={row.resource}
                                             className="text-gray-700"
                                           />
+                                        </td>
+                                        <td className={`${INNER_TD} text-center align-middle`}>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedRow(row);
+                                            }}
+                                            className="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"
+                                            aria-label="Open finding details"
+                                            title="View details"
+                                          >
+                                            <ArrowRight className="h-4 w-4" aria-hidden />
+                                          </button>
                                         </td>
                                       </tr>
                                     );
