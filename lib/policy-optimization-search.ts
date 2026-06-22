@@ -31,6 +31,7 @@ function rowSearchFields(row: PolicyOptimizationItem): string[] {
     row.statement,
     row.groupName,
     row.compartment,
+    row.compartmentOcid,
     row.action,
     row.resource,
     row.optimizationType,

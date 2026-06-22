@@ -1,12 +1,14 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Info,
   Loader2,
   RotateCw,
   Search,
@@ -50,6 +52,119 @@ function WrappedCell({
     >
       {value || "—"}
     </span>
+  );
+}
+
+function CompartmentCell({
+  name,
+  ocid,
+}: {
+  name: string;
+  ocid?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupStyle, setPopupStyle] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+  const ocidValue = ocid?.trim() || "";
+  const showInfo = Boolean(ocidValue);
+  const popupWidth = 288;
+
+  const updatePopupPosition = useCallback(() => {
+    const button = buttonRef.current;
+    const popup = popupRef.current;
+    if (!button || !popup) return;
+
+    const buttonRect = button.getBoundingClientRect();
+    const popupHeight = popup.offsetHeight;
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const placeAbove = spaceBelow < popupHeight + 8;
+    const left = Math.min(
+      Math.max(8, buttonRect.left),
+      window.innerWidth - popupWidth - 8
+    );
+    const top = placeAbove
+      ? Math.max(8, buttonRect.top - popupHeight - 4)
+      : buttonRect.bottom + 4;
+
+    setPopupStyle({ top, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePopupPosition();
+  }, [open, ocidValue, updatePopupPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || popupRef.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
+    };
+
+    const handleScrollOrResize = () => {
+      requestAnimationFrame(updatePopupPosition);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+    };
+  }, [open, updatePopupPosition]);
+
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <WrappedCell value={name} className="text-gray-600" />
+      {showInfo && (
+        <>
+          <button
+            ref={buttonRef}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen((value) => !value);
+            }}
+            className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600"
+            aria-label="Show compartment OCID"
+            aria-expanded={open}
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden />
+          </button>
+          {open &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <div
+                ref={popupRef}
+                className="fixed z-50 w-72 rounded-md border border-slate-200 bg-white p-3 shadow-lg"
+                style={{ top: popupStyle.top, left: popupStyle.left }}
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-label="Compartment OCID"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                  Compartment OCID
+                </p>
+                <p className="break-all font-mono text-[11px] leading-relaxed text-slate-800">
+                  {ocidValue}
+                </p>
+              </div>,
+              document.body
+            )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -205,6 +320,8 @@ function OptimizationDetailsSidebar({
   const coveredBy = row.coveredBy ?? [];
   const uniqueStatements = collectUniqueStatements([...redundantGrants, ...coveredBy]);
   const hasSharedStatement = uniqueStatements.length === 1;
+  const isSinglePolicyFinding =
+    redundantGrants.length === 1 && coveredBy.length === 0;
 
   return (
     <aside
@@ -238,7 +355,26 @@ function OptimizationDetailsSidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-        {redundantGrants.length > 0 && (
+        {isSinglePolicyFinding && (
+          <SidebarSection title="Policy">
+            <GrantRefPill grant={redundantGrants[0]} variant="remove" />
+            {!hasSharedStatement && (
+              <PolicyStatementBlock raw={redundantGrants[0].raw} shared />
+            )}
+          </SidebarSection>
+        )}
+
+        {!isSinglePolicyFinding && redundantGrants.length === 1 && (
+          <SidebarSection title="Redundant grant">
+            <GrantRecordList
+              grants={redundantGrants}
+              variant="remove"
+              showStatementPerRecord={!hasSharedStatement}
+            />
+          </SidebarSection>
+        )}
+
+        {!isSinglePolicyFinding && redundantGrants.length > 1 && (
           <SidebarSection
             title={`Remove (${redundantGrants.length})`}
             description="Redundant grants identified in this finding"
@@ -251,10 +387,20 @@ function OptimizationDetailsSidebar({
           </SidebarSection>
         )}
 
-        {coveredBy.length > 0 && (
+        {coveredBy.length === 1 && (
+          <SidebarSection title="Covered by">
+            <GrantRecordList
+              grants={coveredBy}
+              variant="keep"
+              showStatementPerRecord={!hasSharedStatement}
+            />
+          </SidebarSection>
+        )}
+
+        {coveredBy.length > 1 && (
           <SidebarSection
             title={`Keep (${coveredBy.length})`}
-            description="Existing grant that already provides this access"
+            description="Existing grants that already provide this access"
           >
             <GrantRecordList
               grants={coveredBy}
@@ -595,8 +741,7 @@ export default function OciPolicyOptimizationPage() {
                                     return (
                                       <tr
                                         key={row.findingId}
-                                        className={`cursor-pointer hover:bg-blue-50/40 ${isSelected ? "bg-blue-50" : ""}`}
-                                        onClick={() => setSelectedRow(row)}
+                                        className={isSelected ? "bg-blue-50" : ""}
                                       >
                                         <td className={INNER_TD}>
                                           <WrappedCell
@@ -610,9 +755,9 @@ export default function OciPolicyOptimizationPage() {
                                           </span>
                                         </td>
                                         <td className={INNER_TD}>
-                                          <WrappedCell
-                                            value={row.compartmentTitle ?? row.compartment}
-                                            className="text-gray-600"
+                                          <CompartmentCell
+                                            name={row.compartment}
+                                            ocid={row.compartmentOcid}
                                           />
                                         </td>
                                         <td className={INNER_TD}>
@@ -624,10 +769,7 @@ export default function OciPolicyOptimizationPage() {
                                         <td className={`${INNER_TD} text-center align-middle`}>
                                           <button
                                             type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setSelectedRow(row);
-                                            }}
+                                            onClick={() => setSelectedRow(row)}
                                             className="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"
                                             aria-label="Open finding details"
                                             title="View details"

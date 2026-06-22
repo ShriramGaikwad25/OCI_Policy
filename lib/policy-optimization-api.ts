@@ -51,6 +51,7 @@ function formatSubject(subject: { kind: string; name: string }): string {
 function formatCompartment(compartment: PolicyOptimizationFinding["compartment"]): {
   compartment: string;
   compartmentTitle: string;
+  compartmentOcid: string | null;
 } {
   const name = compartment.name?.trim();
   const ocid = compartment.ocid?.trim();
@@ -60,6 +61,7 @@ function formatCompartment(compartment: PolicyOptimizationFinding["compartment"]
     return {
       compartment: name,
       compartmentTitle: ocid ? `${name} · ${ocid}` : name,
+      compartmentOcid: ocid ?? null,
     };
   }
 
@@ -67,16 +69,23 @@ function formatCompartment(compartment: PolicyOptimizationFinding["compartment"]
     return {
       compartment: "tenancy",
       compartmentTitle: ocid ?? "tenancy",
+      compartmentOcid: ocid ?? null,
     };
   }
 
   if (ocid) {
-    return { compartment: ocid, compartmentTitle: ocid };
+    const label = scope === "COMPARTMENT" ? "Compartment" : scope || "Compartment";
+    return {
+      compartment: label,
+      compartmentTitle: ocid,
+      compartmentOcid: ocid,
+    };
   }
 
   return {
     compartment: scope || "—",
     compartmentTitle: scope || "—",
+    compartmentOcid: null,
   };
 }
 
@@ -105,6 +114,7 @@ export function mapFindingsToRows(findings: PolicyOptimizationFinding[]): Policy
       resource: finding.resource,
       compartment: compartmentFields.compartment,
       compartmentTitle: compartmentFields.compartmentTitle,
+      compartmentOcid: compartmentFields.compartmentOcid,
       condition: firstGrant ? extractConditionFromRaw(firstGrant.raw) : null,
       optimizationType: finding.type,
       reason: finding.reason,

@@ -76,6 +76,7 @@ export interface PolicyOptimizationItem {
   rawStatement?: string;
   coveredByRaw?: string | null;
   compartmentTitle?: string;
+  compartmentOcid?: string | null;
   redundantGrants?: PolicyOptimizationGrant[];
   coveredBy?: PolicyOptimizationGrant[];
 }
