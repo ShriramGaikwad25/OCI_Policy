@@ -52,7 +52,14 @@ export interface PolicyListFilters {
   dateTo: string;
 }
 
+export interface PolicyOptimizationGrant {
+  ref: string;
+  policyName: string;
+  raw: string;
+}
+
 export interface PolicyOptimizationItem {
+  findingId: string;
   policyName: string;
   statement: string;
   groupName: string;
@@ -69,6 +76,8 @@ export interface PolicyOptimizationItem {
   rawStatement?: string;
   coveredByRaw?: string | null;
   compartmentTitle?: string;
+  redundantGrants?: PolicyOptimizationGrant[];
+  coveredBy?: PolicyOptimizationGrant[];
 }
 
 export interface PolicyOptimizationSummary {

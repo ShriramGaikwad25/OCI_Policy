@@ -1,8 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  ArrowRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -19,7 +18,11 @@ import {
   filterPolicyOptimizationRows,
   groupPolicyOptimizationRows,
 } from "@/lib/policy-optimization-search";
-import type { PolicyOptimizationGroup, PolicyOptimizationItem } from "@/types/oci-policy";
+import type {
+  PolicyOptimizationGrant,
+  PolicyOptimizationGroup,
+  PolicyOptimizationItem,
+} from "@/types/oci-policy";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 const EMPTY_OPTIMIZATION_ROWS: PolicyOptimizationItem[] = [];
@@ -70,28 +73,109 @@ function optimizationTypeStyle(type: string): string {
   return "bg-gray-100 text-gray-800 border-gray-200";
 }
 
-function DetailField({
-  label,
-  value,
-  mono = false,
+function formatPolicyStatement(raw: string): string {
+  return raw.trim();
+}
+
+function collectUniqueStatements(grants: PolicyOptimizationGrant[]): string[] {
+  const seen = new Set<string>();
+  const statements: string[] = [];
+  for (const grant of grants) {
+    const raw = grant.raw.trim();
+    if (!raw || seen.has(raw)) continue;
+    seen.add(raw);
+    statements.push(raw);
+  }
+  return statements;
+}
+
+function GrantRefPill({
+  grant,
+  variant,
 }: {
-  label: string;
-  value: string;
-  mono?: boolean;
+  grant: PolicyOptimizationGrant;
+  variant: "remove" | "keep";
 }) {
-  const display = value || "—";
+  const styles =
+    variant === "remove"
+      ? "border-red-200 bg-red-50 text-red-900"
+      : "border-emerald-200 bg-emerald-50 text-emerald-900";
+
   return (
-    <div className="rounded-md border border-gray-100 bg-gray-50/80 px-3 py-2.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
-        {label}
-      </p>
-      <p
-        className={`text-sm text-gray-900 break-words leading-snug ${mono ? "font-mono text-xs" : ""}`}
-        title={display}
-      >
-        {display}
-      </p>
+    <span
+      className={`inline-flex max-w-full flex-col rounded-lg border px-2.5 py-1.5 text-xs leading-tight ${styles}`}
+    >
+      <span className="font-semibold break-words">{grant.policyName}</span>
+      <span className="font-mono text-[11px] opacity-80">{grant.ref}</span>
+    </span>
+  );
+}
+
+function GrantRecordList({
+  grants,
+  variant,
+  showStatementPerRecord,
+}: {
+  grants: PolicyOptimizationGrant[];
+  variant: "remove" | "keep";
+  showStatementPerRecord: boolean;
+}) {
+  if (showStatementPerRecord) {
+    return (
+      <div className="space-y-3">
+        {grants.map((grant) => (
+          <div
+            key={`${grant.policyName}-${grant.ref}`}
+            className="space-y-2 rounded-lg border border-slate-200 bg-white p-3"
+          >
+            <GrantRefPill grant={grant} variant={variant} />
+            <PolicyStatementBlock raw={grant.raw} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {grants.map((grant) => (
+        <GrantRefPill key={`${grant.policyName}-${grant.ref}`} grant={grant} variant={variant} />
+      ))}
     </div>
+  );
+}
+
+function PolicyStatementBlock({ raw, shared = false }: { raw: string; shared?: boolean }) {
+  const formatted = formatPolicyStatement(raw);
+
+  return (
+    <div
+      className={`rounded-lg border border-slate-200 ${shared ? "bg-white" : "bg-slate-50"}`}
+    >
+      <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] px-3 py-2.5 text-[11px] leading-relaxed text-slate-700 font-mono">
+        {formatted}
+      </pre>
+    </div>
+  );
+}
+
+function SidebarSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2">
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
+        {description && <p className="mt-0.5 text-xs text-slate-400">{description}</p>}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -116,16 +200,31 @@ function OptimizationDetailsSidebar({
   const action = optimizationSidebarAction(row.optimizationType);
   const showRemoveDuplicate = action === "remove-duplicate";
   const showModify = action === "modify";
+  const redundantGrants = row.redundantGrants ?? [];
+  const coveredBy = row.coveredBy ?? [];
+  const uniqueStatements = collectUniqueStatements([...redundantGrants, ...coveredBy]);
+  const hasSharedStatement = uniqueStatements.length === 1;
 
   return (
     <aside
-      className="fixed right-0 top-[60px] z-50 flex flex-col border-l border-gray-200 bg-white shadow-2xl"
+      className="fixed right-0 top-[60px] z-50 flex flex-col border-l border-gray-200 bg-slate-50 shadow-2xl"
       style={{ width: widthPx, height: "calc(100vh - 60px)" }}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3 bg-gradient-to-r from-slate-50 to-white">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-1 h-7 bg-blue-600 rounded-full shrink-0" aria-hidden />
-          <h2 className="text-base font-semibold text-gray-900 truncate">Statement details</h2>
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 bg-white px-4 py-4">
+        <div className="min-w-0 space-y-2">
+          <h2 className="text-base font-semibold text-gray-900">Finding details</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${optimizationTypeStyle(row.optimizationType)}`}
+            >
+              {row.optimizationType}
+            </span>
+            {row.severity && (
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                {row.severity}
+              </span>
+            )}
+          </div>
         </div>
         <button
           type="button"
@@ -137,86 +236,73 @@ function OptimizationDetailsSidebar({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex max-w-full items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${optimizationTypeStyle(row.optimizationType)}`}
-            >
-              {row.optimizationType}
-            </span>
-            {row.severity && (
-              <span className="inline-flex max-w-full items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
-                {row.severity}
-              </span>
-            )}
-          </div>
-          <DetailField label="Policy name" value={row.policyName} />
-          <DetailField label="Statement ref" value={row.statement} mono />
-          {row.rawStatement && (
-            <DetailField label="Statement text" value={row.rawStatement} mono />
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <DetailField label="Subject" value={row.groupName} />
-            <DetailField label="Owner" value={row.owner} />
-          </div>
-        </div>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+        {redundantGrants.length > 0 && (
+          <SidebarSection
+            title={`Remove (${redundantGrants.length})`}
+            description="Redundant grants identified in this finding"
+          >
+            <GrantRecordList
+              grants={redundantGrants}
+              variant="remove"
+              showStatementPerRecord={!hasSharedStatement}
+            />
+          </SidebarSection>
+        )}
 
-        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Permission
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <DetailField label="Action" value={row.action} />
-            <DetailField label="Resource" value={row.resource} />
-          </div>
-          <DetailField label="Compartment" value={row.compartmentTitle ?? row.compartment} />
-          <DetailField label="Condition" value={row.condition ?? "—"} mono />
-        </div>
+        {coveredBy.length > 0 && (
+          <SidebarSection
+            title={`Keep (${coveredBy.length})`}
+            description="Existing grant that already provides this access"
+          >
+            <GrantRecordList
+              grants={coveredBy}
+              variant="keep"
+              showStatementPerRecord={!hasSharedStatement}
+            />
+          </SidebarSection>
+        )}
 
-        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Analysis
+        {hasSharedStatement && uniqueStatements[0] && (
+          <SidebarSection
+            title="Policy statement"
+            description="Shared statement text for the grants above"
+          >
+            <PolicyStatementBlock raw={uniqueStatements[0]} shared />
+          </SidebarSection>
+        )}
+
+        <SidebarSection title="Reason">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-relaxed text-amber-950">
+            {row.reason || "—"}
           </p>
-          <DetailField label="Covered by statement" value={row.coveredByStatement ?? "—"} mono />
-          {row.coveredByRaw && (
-            <DetailField label="Covered by text" value={row.coveredByRaw} mono />
-          )}
-          <div className="rounded-md border border-amber-100 bg-amber-50/60 px-3 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800 mb-1">
-              Reason
-            </p>
-            <p className="text-sm text-amber-950 leading-relaxed">{row.reason || "—"}</p>
-          </div>
-          <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-green-800 mb-1">
-              Recommendation
-            </p>
-            <p className="text-sm text-green-900 leading-relaxed">{row.recommendation || "—"}</p>
-          </div>
-        </div>
+        </SidebarSection>
+
+        <SidebarSection title="Suggested action">
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm leading-relaxed text-emerald-950">
+            {row.recommendation || "—"}
+          </p>
+        </SidebarSection>
       </div>
 
       {(showRemoveDuplicate || showModify) && (
-        <div className="shrink-0 flex justify-end border-t border-gray-200 bg-gray-50 px-4 py-3">
-          <div className="flex w-1/2 min-w-[120px] flex-col gap-2">
-            {showRemoveDuplicate && (
-              <button
-                type="button"
-                className="w-full rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-              >
-                Remove Duplicate
-              </button>
-            )}
-            {showModify && (
-              <button
-                type="button"
-                className="w-full rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-              >
-                Modify
-              </button>
-            )}
-          </div>
+        <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+          {showRemoveDuplicate && (
+            <button
+              type="button"
+              className="w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+            >
+              Remove duplicate
+            </button>
+          )}
+          {showModify && (
+            <button
+              type="button"
+              className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            >
+              Modify
+            </button>
+          )}
         </div>
       )}
     </aside>
@@ -279,12 +365,7 @@ export default function OciPolicyOptimizationPage() {
   useEffect(() => {
     if (
       selectedRow &&
-      !filteredRows.some(
-        (row) =>
-          row.policyName === selectedRow.policyName &&
-          row.statement === selectedRow.statement &&
-          row.optimizationType === selectedRow.optimizationType
-      )
+      !filteredRows.some((row) => row.findingId === selectedRow.findingId)
     ) {
       setSelectedRow(null);
     }
@@ -444,7 +525,7 @@ export default function OciPolicyOptimizationPage() {
               <thead>
                 <tr className="border-b-2 border-slate-300">
                   <th className={TH}>Type</th>
-                  <th className={TH}>Statements</th>
+                  <th className={TH}>Records</th>
                   <th className={TH} aria-label="Expand" />
                 </tr>
               </thead>
@@ -481,51 +562,47 @@ export default function OciPolicyOptimizationPage() {
                             <div className="overflow-x-auto rounded-md border border-blue-100 bg-white shadow-sm">
                               <table className="w-full table-fixed text-sm border-collapse">
                                 <colgroup>
-                                  <col className="w-[22%]" />
-                                  <col className="w-[18%]" />
-                                  <col className="w-[18%]" />
-                                  <col className="w-[16%]" />
-                                  <col className="w-[18%]" />
-                                  <col className="w-12" />
+                                  <col className="w-[30%]" />
+                                  <col className="w-[12%]" />
+                                  <col className="w-[28%]" />
+                                  <col className="w-[30%]" />
                                 </colgroup>
                                 <thead>
                                   <tr>
-                                    <th scope="col" className={`${INNER_TH} w-[22%]`}>
+                                    <th scope="col" className={INNER_TH}>
                                       Subject
                                     </th>
-                                    <th scope="col" className={`${INNER_TH} w-[14%]`}>
+                                    <th scope="col" className={INNER_TH}>
+                                      Action
+                                    </th>
+                                    <th scope="col" className={INNER_TH}>
                                       Compartment
                                     </th>
-                                    <th scope="col" className={`${INNER_TH} w-[18%]`}>
-                                      Policy
-                                    </th>
-                                    <th scope="col" className={`${INNER_TH} w-[14%]`}>
-                                      Statement
-                                    </th>
-                                    <th scope="col" className={`${INNER_TH} w-[16%]`}>
-                                      Permission
-                                    </th>
-                                    <th scope="col" className={`${INNER_TH} w-12 text-center`}>
-                                      <span className="sr-only">Details</span>
+                                    <th scope="col" className={INNER_TH}>
+                                      Resource
                                     </th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                   {group.statements.map((row) => {
                                     const isSelected =
-                                      selectedRow?.policyName === row.policyName &&
-                                      selectedRow?.statement === row.statement &&
-                                      selectedRow?.optimizationType === row.optimizationType;
+                                      selectedRow?.findingId === row.findingId;
                                     return (
                                       <tr
-                                        key={`${row.policyName}-${row.statement}-${row.optimizationType}`}
-                                        className={`hover:bg-blue-50/40 ${isSelected ? "bg-blue-50" : ""}`}
+                                        key={row.findingId}
+                                        className={`cursor-pointer hover:bg-blue-50/40 ${isSelected ? "bg-blue-50" : ""}`}
+                                        onClick={() => setSelectedRow(row)}
                                       >
                                         <td className={INNER_TD}>
                                           <WrappedCell
                                             value={row.groupName}
                                             className="font-medium text-gray-900"
                                           />
+                                        </td>
+                                        <td className={INNER_TD}>
+                                          <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                                            {row.action}
+                                          </span>
                                         </td>
                                         <td className={INNER_TD}>
                                           <WrappedCell
@@ -535,41 +612,9 @@ export default function OciPolicyOptimizationPage() {
                                         </td>
                                         <td className={INNER_TD}>
                                           <WrappedCell
-                                            value={row.policyName}
-                                            className="font-medium text-gray-900"
-                                          />
-                                        </td>
-                                        <td className={INNER_TD}>
-                                          <WrappedCell
-                                            value={row.statement}
-                                            mono
+                                            value={row.resource}
                                             className="text-gray-700"
                                           />
-                                        </td>
-                                        <td className={INNER_TD}>
-                                          <div className="flex flex-wrap items-center gap-1.5">
-                                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
-                                              {row.action}
-                                            </span>
-                                            <WrappedCell
-                                              value={row.resource}
-                                              className="text-gray-600"
-                                            />
-                                          </div>
-                                        </td>
-                                        <td className={`${INNER_TD} text-center align-middle`}>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setSelectedRow(row);
-                                            }}
-                                            className="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"
-                                            aria-label="Open row details"
-                                            title="View details"
-                                          >
-                                            <ArrowRight className="h-4 w-4" aria-hidden />
-                                          </button>
                                         </td>
                                       </tr>
                                     );

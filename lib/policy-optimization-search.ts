@@ -21,6 +21,11 @@ function searchTokens(rawQuery: string): string[] {
 }
 
 function rowSearchFields(row: PolicyOptimizationItem): string[] {
+  const grantFields =
+    row.redundantGrants?.flatMap((grant) => [grant.ref, grant.policyName, grant.raw]) ?? [];
+  const coveredFields =
+    row.coveredBy?.flatMap((grant) => [grant.ref, grant.policyName, grant.raw]) ?? [];
+
   return [
     row.policyName,
     row.statement,
@@ -31,6 +36,10 @@ function rowSearchFields(row: PolicyOptimizationItem): string[] {
     row.optimizationType,
     row.severity,
     row.rawStatement,
+    row.reason,
+    row.recommendation,
+    ...grantFields,
+    ...coveredFields,
   ].map(normalizeSearchText);
 }
 

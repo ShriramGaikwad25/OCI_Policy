@@ -1,4 +1,5 @@
 import type {
+  PolicyOptimizationGrant,
   PolicyOptimizationItem,
   PolicyOptimizationResult,
   PolicyOptimizationSummary,
@@ -10,12 +11,6 @@ export const POLICY_OPTIMIZATION_API_URL =
 
 export function isPolicyOptimizationApiConfigured(): boolean {
   return true;
-}
-
-interface PolicyOptimizationGrant {
-  ref: string;
-  policyName: string;
-  raw: string;
 }
 
 interface PolicyOptimizationFinding {
@@ -86,33 +81,42 @@ function formatCompartment(compartment: PolicyOptimizationFinding["compartment"]
 }
 
 export function mapFindingsToRows(findings: PolicyOptimizationFinding[]): PolicyOptimizationItem[] {
-  const rows: PolicyOptimizationItem[] = [];
+  return findings.map((finding, index) => {
+    const redundantGrants = (finding.redundantGrants ?? []).map((grant) => ({
+      ref: grant.ref,
+      policyName: grant.policyName,
+      raw: grant.raw,
+    }));
+    const coveredBy = (finding.coveredBy ?? []).map((grant) => ({
+      ref: grant.ref,
+      policyName: grant.policyName,
+      raw: grant.raw,
+    }));
+    const firstGrant = redundantGrants[0];
+    const compartmentFields = formatCompartment(finding.compartment);
 
-  for (const finding of findings) {
-    for (const grant of finding.redundantGrants ?? []) {
-      const compartmentFields = formatCompartment(finding.compartment);
-      rows.push({
-        policyName: grant.policyName,
-        statement: grant.ref,
-        groupName: formatSubject(finding.subject),
-        owner: "—",
-        action: finding.verb,
-        resource: finding.resource,
-        compartment: compartmentFields.compartment,
-        compartmentTitle: compartmentFields.compartmentTitle,
-        condition: extractConditionFromRaw(grant.raw),
-        optimizationType: finding.type,
-        reason: finding.reason,
-        coveredByStatement: finding.coveredBy?.[0]?.ref ?? null,
-        recommendation: finding.suggestedAction,
-        severity: finding.severity,
-        rawStatement: grant.raw,
-        coveredByRaw: finding.coveredBy?.[0]?.raw ?? null,
-      });
-    }
-  }
-
-  return rows;
+    return {
+      findingId: `${finding.type}-${index}`,
+      policyName: firstGrant?.policyName ?? "—",
+      statement: redundantGrants.map((grant) => grant.ref).join(", ") || "—",
+      groupName: formatSubject(finding.subject),
+      owner: "—",
+      action: finding.verb,
+      resource: finding.resource,
+      compartment: compartmentFields.compartment,
+      compartmentTitle: compartmentFields.compartmentTitle,
+      condition: firstGrant ? extractConditionFromRaw(firstGrant.raw) : null,
+      optimizationType: finding.type,
+      reason: finding.reason,
+      coveredByStatement: coveredBy[0]?.ref ?? null,
+      recommendation: finding.suggestedAction,
+      severity: finding.severity,
+      rawStatement: firstGrant?.raw,
+      coveredByRaw: coveredBy[0]?.raw ?? null,
+      redundantGrants,
+      coveredBy,
+    };
+  });
 }
 
 function parsePolicyOptimizationResponse(payload: unknown): PolicyOptimizationResult {
