@@ -1,6 +1,7 @@
 import type {
   TagDashboardResult,
   TagDashboardSummary,
+  TagDashboardTagResource,
   TagDashboardTagRow,
   TagDashboardTagsView,
 } from "@/types/oci-policy";
@@ -241,6 +242,151 @@ function isDefinedTagKind(kind: string | undefined, source?: string): boolean {
   return normalized.includes("defined");
 }
 
+const IGNORED_DEFINED_TAG_NAMESPACE = "Oracle_Tags";
+
+function normalizeTagNamespace(namespace: string): string {
+  return namespace.trim().toLowerCase().replace(/-/g, "_");
+}
+
+function isIgnoredDefinedTagNamespace(namespace: string | undefined): boolean {
+  if (!namespace || namespace === "—") return false;
+  return (
+    normalizeTagNamespace(namespace) ===
+    normalizeTagNamespace(IGNORED_DEFINED_TAG_NAMESPACE)
+  );
+}
+
+function withoutIgnoredDefinedNamespaces(view: TagDashboardTagsView): TagDashboardTagsView {
+  return {
+    defined: view.defined.filter((row) => !isIgnoredDefinedTagNamespace(row.namespace)),
+    freeform: view.freeform,
+  };
+}
+
+function readResourcesFromRecord(record: Record<string, unknown>): TagDashboardTagResource[] {
+  if (!Array.isArray(record.resources)) return [];
+
+  return record.resources.map((resource) =>
+    readResourceFields(resource as Record<string, unknown>)
+  );
+}
+
+function rowToResources(row: TagDashboardTagRow): TagDashboardTagResource[] {
+  if (row.resources?.length) return row.resources;
+
+  if (
+    row.displayName ||
+    row.resourceType ||
+    row.lifecycleState ||
+    row.timeCreated ||
+    row.resourceOcid
+  ) {
+    return [
+      {
+        displayName: row.displayName,
+        resourceType: row.resourceType,
+        lifecycleState: row.lifecycleState,
+        timeCreated: row.timeCreated,
+        resourceOcid: row.resourceOcid,
+      },
+    ];
+  }
+
+  return [];
+}
+
+function stripFlatResourceFields(row: TagDashboardTagRow): TagDashboardTagRow {
+  const resources = rowToResources(row);
+
+  return {
+    ...row,
+    resources: resources.length > 0 ? resources : undefined,
+    displayName: undefined,
+    resourceType: undefined,
+    lifecycleState: undefined,
+    timeCreated: undefined,
+    resourceOcid: undefined,
+  };
+}
+
+function tagIdentity(row: TagDashboardTagRow, category: "defined" | "freeform"): string {
+  if (category === "defined") {
+    return `${row.namespace}|${row.key}|${row.value}`;
+  }
+
+  return `${row.key}|${row.value}`;
+}
+
+function mergeTagResources(
+  existing: TagDashboardTagResource[],
+  incoming: TagDashboardTagResource[]
+): TagDashboardTagResource[] {
+  const merged = [...existing];
+
+  for (const resource of incoming) {
+    const duplicate = merged.some(
+      (item) =>
+        item.resourceOcid &&
+        resource.resourceOcid &&
+        item.resourceOcid === resource.resourceOcid
+    );
+
+    if (!duplicate) {
+      merged.push(resource);
+    }
+  }
+
+  return merged;
+}
+
+function groupTagRows(
+  rows: TagDashboardTagRow[],
+  category: "defined" | "freeform"
+): TagDashboardTagRow[] {
+  const grouped = new Map<string, TagDashboardTagRow>();
+
+  for (const rawRow of rows) {
+    const row = stripFlatResourceFields(rawRow);
+    const identity = tagIdentity(row, category);
+    const resources = rowToResources(row);
+    const existing = grouped.get(identity);
+
+    if (!existing) {
+      grouped.set(identity, {
+        ...row,
+        resources: resources.length > 0 ? resources : undefined,
+        resourceCount:
+          row.resourceCount ?? (resources.length > 0 ? resources.length : undefined),
+      });
+      continue;
+    }
+
+    const mergedResources = mergeTagResources(rowToResources(existing), resources);
+
+    grouped.set(identity, {
+      ...existing,
+      resources: mergedResources.length > 0 ? mergedResources : undefined,
+      resourceCount:
+        Math.max(
+          existing.resourceCount ?? 0,
+          row.resourceCount ?? 0,
+          mergedResources.length
+        ) || undefined,
+    });
+  }
+
+  return Array.from(grouped.values());
+}
+
+function finalizeTagDashboardView(view: TagDashboardTagsView): TagDashboardTagsView {
+  const filtered = withoutIgnoredDefinedNamespaces(view);
+
+  return {
+    defined: groupTagRows(filtered.defined, "defined"),
+    freeform: groupTagRows(filtered.freeform, "freeform"),
+  };
+}
+
 function readResourceCount(record: Record<string, unknown>): number | undefined {
   const value = record.resourceCount ?? record.resource_count;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -300,8 +446,15 @@ function readResourceFields(record: Record<string, unknown>): {
   };
 }
 
-function expandTagEntry(tag: unknown, tagIndex: number): TagDashboardTagRow[] {
-  if (!tag || typeof tag !== "object") return [];
+function expandTagEntry(tag: unknown, tagIndex: number): TagDashboardTagRow {
+  if (!tag || typeof tag !== "object") {
+    return {
+      id: `tag-${tagIndex}`,
+      namespace: "—",
+      key: "—",
+      value: "—",
+    };
+  }
 
   const record = tag as Record<string, unknown>;
   const kind = readOptionalString(record, "kind");
@@ -309,34 +462,18 @@ function expandTagEntry(tag: unknown, tagIndex: number): TagDashboardTagRow[] {
   const key = readString(record, "tagKey", "key");
   const value = readString(record, "value", "tagValue", "val");
   const resourceCount = readResourceCount(record);
-  const resources = Array.isArray(record.resources) ? record.resources : [];
+  const resources = readResourcesFromRecord(record);
 
-  const base = {
+  return {
+    id: `tag-${tagIndex}`,
     kind,
     namespace,
     key,
     value,
-    resourceCount,
+    resourceCount: resourceCount ?? (resources.length > 0 ? resources.length : undefined),
+    resources: resources.length > 0 ? resources : undefined,
     source: kind,
   };
-
-  if (resources.length === 0) {
-    return [
-      {
-        id: `tag-${tagIndex}`,
-        ...base,
-      },
-    ];
-  }
-
-  return resources.map((resource, resourceIndex) => {
-    const resourceFields = readResourceFields(resource as Record<string, unknown>);
-    return {
-      id: `tag-${tagIndex}-resource-${resourceIndex}-${resourceFields.resourceOcid ?? resourceIndex}`,
-      ...base,
-      ...resourceFields,
-    };
-  });
 }
 
 function buildFromTagEntries(tags: unknown[]): TagDashboardTagsView {
@@ -344,12 +481,11 @@ function buildFromTagEntries(tags: unknown[]): TagDashboardTagsView {
   const freeform: TagDashboardTagRow[] = [];
 
   tags.forEach((tag, index) => {
-    for (const row of expandTagEntry(tag, index)) {
-      if (isFreeformTagKind(row.kind, row.source)) {
-        freeform.push({ ...row, kind: "FREEFORM", source: "FREEFORM" });
-      } else {
-        defined.push({ ...row, kind: "DEFINED", source: "DEFINED" });
-      }
+    const row = expandTagEntry(tag, index);
+    if (isFreeformTagKind(row.kind, row.source)) {
+      freeform.push({ ...row, kind: "FREEFORM", source: "FREEFORM" });
+    } else {
+      defined.push({ ...row, kind: "DEFINED", source: "DEFINED" });
     }
   });
 
@@ -367,7 +503,8 @@ function parseTagDashboardTagItem(
   const namespace = readOptionalString(record, "namespace", "tagNamespace", "ns") ?? "—";
   const key = readString(record, "tagKey", "key");
   const value = readString(record, "value", "tagValue", "val");
-  const resourceFields = readResourceFields(record);
+  const resources = readResourcesFromRecord(record);
+  const resourceFields = resources.length === 0 ? readResourceFields(record) : {};
   const kind =
     readOptionalString(record, "kind") ??
     (category === "defined" ? "DEFINED" : category === "freeform" ? "FREEFORM" : undefined);
@@ -375,12 +512,13 @@ function parseTagDashboardTagItem(
     readOptionalString(record, "source", "tagType", "type") ?? kind;
 
   return {
-    id: `${category ?? "tag"}-${namespace}-${key}-${value}-${resourceFields.resourceOcid ?? index}`,
+    id: `${category ?? "tag"}-${namespace}-${key}-${value}-${resources[0]?.resourceOcid ?? resourceFields.resourceOcid ?? index}`,
     kind,
     namespace,
     key,
     value,
     resourceCount: readResourceCount(record),
+    resources: resources.length > 0 ? resources : undefined,
     ...resourceFields,
     source,
   };
@@ -403,7 +541,8 @@ function parseDefinedTagsValue(value: unknown, startIndex: number): TagDashboard
       for (const [key, tagValue] of Object.entries(keys as Record<string, unknown>)) {
         if (tagValue && typeof tagValue === "object" && !Array.isArray(tagValue)) {
           const tagRecord = tagValue as Record<string, unknown>;
-          const resourceFields = readResourceFields(tagRecord);
+          const resources = readResourcesFromRecord(tagRecord);
+          const resourceFields = resources.length === 0 ? readResourceFields(tagRecord) : {};
           rows.push({
             id: `defined-${namespace}-${key}-${index}`,
             kind: readOptionalString(tagRecord, "kind") ?? "DEFINED",
@@ -413,6 +552,7 @@ function parseDefinedTagsValue(value: unknown, startIndex: number): TagDashboard
               tagRecord.value ?? tagRecord.tagValue ?? tagRecord.val ?? tagValue
             ),
             resourceCount: readResourceCount(tagRecord),
+            resources: resources.length > 0 ? resources : undefined,
             ...resourceFields,
             source: "DEFINED",
           });
@@ -460,7 +600,8 @@ function parseFreeformTagsValue(value: unknown, startIndex: number): TagDashboar
   for (const [key, tagValue] of Object.entries(value as Record<string, unknown>)) {
     if (tagValue && typeof tagValue === "object" && !Array.isArray(tagValue)) {
       const tagRecord = tagValue as Record<string, unknown>;
-      const resourceFields = readResourceFields(tagRecord);
+      const resources = readResourcesFromRecord(tagRecord);
+      const resourceFields = resources.length === 0 ? readResourceFields(tagRecord) : {};
       rows.push({
         id: `freeform-${key}-${index}`,
         kind: readOptionalString(tagRecord, "kind") ?? "FREEFORM",
@@ -470,6 +611,7 @@ function parseFreeformTagsValue(value: unknown, startIndex: number): TagDashboar
           tagRecord.value ?? tagRecord.tagValue ?? tagRecord.val ?? tagValue
         ),
         resourceCount: readResourceCount(tagRecord),
+        resources: resources.length > 0 ? resources : undefined,
         ...resourceFields,
         source: "FREEFORM",
       });
@@ -527,14 +669,14 @@ export function buildTagDashboardTagsView(payload: unknown): TagDashboardTagsVie
     );
 
     if (usesKindShape) {
-      return buildFromTagEntries(tags);
+      return finalizeTagDashboardView(buildFromTagEntries(tags));
     }
 
     const flatRows = tags
       .map((item, index) => parseTagDashboardTagItem(item, index))
       .filter((row): row is TagDashboardTagRow => row !== null);
 
-    return categorizeFlatTagRows(flatRows);
+    return finalizeTagDashboardView(categorizeFlatTagRows(flatRows));
   }
 
   const defined = parseDefinedTagsValue(
@@ -547,7 +689,7 @@ export function buildTagDashboardTagsView(payload: unknown): TagDashboardTagsVie
   );
 
   if (defined.length > 0 || freeform.length > 0) {
-    return { defined, freeform };
+    return finalizeTagDashboardView({ defined, freeform });
   }
 
   return { defined: [], freeform: [] };

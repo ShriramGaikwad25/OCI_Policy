@@ -105,6 +105,14 @@ export interface TagDashboardResult {
   tenancyName: string | null;
 }
 
+export type TagDashboardTagResource = {
+  displayName?: string;
+  resourceType?: string;
+  lifecycleState?: string;
+  timeCreated?: string;
+  resourceOcid?: string;
+};
+
 export type TagDashboardTagRow = {
   id: string;
   kind?: string;
@@ -112,6 +120,7 @@ export type TagDashboardTagRow = {
   key: string;
   value: string;
   resourceCount?: number;
+  resources?: TagDashboardTagResource[];
   displayName?: string;
   resourceType?: string;
   lifecycleState?: string;

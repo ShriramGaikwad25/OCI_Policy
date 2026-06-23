@@ -11,7 +11,7 @@ import {
   loadTagDashboard,
   type LoadTagDashboardCard,
 } from "@/lib/tag-dashboard-api";
-import type { TagDashboardTagRow } from "@/types/oci-policy";
+import type { TagDashboardTagRow, TagDashboardTagResource } from "@/types/oci-policy";
 
 function SummaryStatBox({
   label,
@@ -67,8 +67,11 @@ const TAG_SECTION_STYLES = {
     title: "text-blue-900",
     count: "border-blue-200 bg-white text-blue-800",
     th: "px-4 py-2.5 text-left text-[11px] font-semibold text-blue-800 uppercase tracking-wider bg-blue-50/80 border-b border-blue-100",
-    label: "DEFINED",
-    empty: "No DEFINED tags found.",
+    tagCell: "border-r border-gray-200",
+    resourceCell: "border-l-2 border-gray-300",
+    label: "DEFINED TAGS",
+    labelNote: "(Ignored Oracle_Tags)",
+    empty: "No DEFINED tags found (Oracle_Tags excluded).",
   },
   freeform: {
     shell: "border-amber-100",
@@ -77,10 +80,36 @@ const TAG_SECTION_STYLES = {
     title: "text-amber-950",
     count: "border-amber-200 bg-white text-amber-900",
     th: "px-4 py-2.5 text-left text-[11px] font-semibold text-amber-900 uppercase tracking-wider bg-amber-50/70 border-b border-amber-100",
-    label: "FREEFORM",
+    tagCell: "border-r border-gray-200",
+    resourceCell: "border-l-2 border-gray-300",
+    label: "FREEFORM TAGS",
     empty: "No FREEFORM tags found.",
   },
 } as const;
+
+function getTagResources(row: TagDashboardTagRow): TagDashboardTagResource[] {
+  if (row.resources?.length) return row.resources;
+
+  if (
+    row.displayName ||
+    row.resourceType ||
+    row.lifecycleState ||
+    row.timeCreated ||
+    row.resourceOcid
+  ) {
+    return [
+      {
+        displayName: row.displayName,
+        resourceType: row.resourceType,
+        lifecycleState: row.lifecycleState,
+        timeCreated: row.timeCreated,
+        resourceOcid: row.resourceOcid,
+      },
+    ];
+  }
+
+  return [{}];
+}
 
 function TagSectionTable({
   variant,
@@ -98,12 +127,19 @@ function TagSectionTable({
       <div className={`flex items-center justify-between gap-4 border-b px-4 py-3 ${styles.bar}`}>
         <div className="flex min-w-0 items-center gap-3">
           <span className={`h-7 w-1 shrink-0 rounded-full ${styles.accent}`} aria-hidden />
-          <h2 className={`text-sm font-semibold tracking-tight ${styles.title}`}>{styles.label}</h2>
+          <h2 className={`text-sm font-semibold tracking-tight ${styles.title}`}>
+            {styles.label}
+            {"labelNote" in styles && styles.labelNote ? (
+              <span className="ml-1.5 text-xs font-normal text-gray-500">
+                {styles.labelNote}
+              </span>
+            ) : null}
+          </h2>
         </div>
         <span
           className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium tabular-nums ${styles.count}`}
         >
-          {rows.length} {rows.length === 1 ? "row" : "rows"}
+          {rows.length} {rows.length === 1 ? "tag" : "tags"}
         </span>
       </div>
 
@@ -125,10 +161,10 @@ function TagSectionTable({
                 <th scope="col" className={styles.th}>
                   Value
                 </th>
-                <th scope="col" className={styles.th}>
+                <th scope="col" className={`${styles.th} border-r ${styles.tagCell}`}>
                   Resource count
                 </th>
-                <th scope="col" className={styles.th}>
+                <th scope="col" className={`${styles.th} ${styles.resourceCell}`}>
                   Display name
                 </th>
                 <th scope="col" className={styles.th}>
@@ -142,29 +178,73 @@ function TagSectionTable({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rows.map((row) => (
-                <tr key={row.id} className="bg-white">
-                  {showNamespace && (
-                    <td className="px-4 py-2.5 text-gray-800">{row.namespace}</td>
-                  )}
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{row.key}</td>
-                  <td className="px-4 py-2.5 break-words text-gray-700 [overflow-wrap:anywhere]">
-                    {row.value}
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums text-gray-600">
-                    {row.resourceCount ?? "—"}
-                  </td>
-                  <td className="px-4 py-2.5 font-medium text-gray-900">
-                    {row.displayName ?? "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-600">{row.resourceType ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-gray-600">{row.lifecycleState ?? "—"}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap text-gray-600">
-                    {row.timeCreated ?? "—"}
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {rows.flatMap((row) => {
+                const resources = getTagResources(row);
+                const span = resources.length;
+                const hasMultipleResources = span > 1;
+
+                return resources.map((resource, resourceIndex) => {
+                  const isLastResourceInTag = resourceIndex === resources.length - 1;
+                  const isContinuationRow = resourceIndex > 0;
+                  const resourceRowClass = [
+                    "bg-white",
+                    isContinuationRow ? "border-t border-gray-200" : "",
+                    isLastResourceInTag ? "border-b-2 border-gray-300" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
+                  return (
+                    <tr key={`${row.id}-${resourceIndex}`} className={resourceRowClass}>
+                      {resourceIndex === 0 && (
+                        <>
+                          {showNamespace && (
+                            <td
+                              rowSpan={span}
+                              className={`px-4 py-2.5 align-top text-gray-800 ${styles.tagCell}`}
+                            >
+                              {row.namespace}
+                            </td>
+                          )}
+                          <td
+                            rowSpan={span}
+                            className={`px-4 py-2.5 align-top font-medium text-gray-900 ${styles.tagCell}`}
+                          >
+                            {row.key}
+                          </td>
+                          <td
+                            rowSpan={span}
+                            className={`px-4 py-2.5 align-top break-words text-gray-700 [overflow-wrap:anywhere] ${styles.tagCell}`}
+                          >
+                            {row.value}
+                          </td>
+                          <td
+                            rowSpan={span}
+                            className={`px-4 py-2.5 align-top tabular-nums text-gray-600 ${styles.tagCell}`}
+                          >
+                            {row.resourceCount ?? "—"}
+                          </td>
+                        </>
+                      )}
+                      <td
+                        className={`px-4 py-2.5 font-medium text-gray-900 ${
+                          hasMultipleResources || resourceIndex === 0 ? styles.resourceCell : ""
+                        }`}
+                      >
+                        {resource.displayName ?? "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-600">{resource.resourceType ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-600">
+                        {resource.lifecycleState ?? "—"}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-gray-600">
+                        {resource.timeCreated ?? "—"}
+                      </td>
+                    </tr>
+                  );
+                });
+              })}
             </tbody>
           </table>
         </div>
