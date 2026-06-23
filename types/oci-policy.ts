@@ -98,6 +98,33 @@ export interface PolicyOptimizationResult {
   tenancyName: string | null;
 }
 
+export type TagDashboardSummary = Record<string, number>;
+
+export interface TagDashboardResult {
+  summary: TagDashboardSummary | null;
+  tenancyName: string | null;
+}
+
+export type TagDashboardTagRow = {
+  id: string;
+  kind?: string;
+  namespace: string;
+  key: string;
+  value: string;
+  resourceCount?: number;
+  displayName?: string;
+  resourceType?: string;
+  lifecycleState?: string;
+  timeCreated?: string;
+  source?: string;
+  resourceOcid?: string;
+};
+
+export type TagDashboardTagsView = {
+  defined: TagDashboardTagRow[];
+  freeform: TagDashboardTagRow[];
+};
+
 export interface PolicyOptimizationGroup {
   key: string;
   optimizationType: string;

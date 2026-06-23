@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  FolderSync,
   Info,
   Loader2,
   RotateCw,
@@ -17,6 +18,12 @@ import {
   X,
 } from "lucide-react";
 import { useOciPolicyOptimization } from "@/hooks/useOciPolicyOptimization";
+import {
+  buildLoadPolicyGraphCards,
+  loadPolicyGraph,
+  type LoadPolicyGraphCard,
+} from "@/lib/policy-optimization-api";
+import Modal from "@/components/Modal";
 import {
   filterPolicyOptimizationRows,
   groupPolicyOptimizationRows,
@@ -181,6 +188,35 @@ function SummaryStatBox({
     <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm min-w-0">
       <p className="text-xs text-gray-500 mb-1 leading-snug">{label}</p>
       <p className={`text-2xl font-semibold tabular-nums ${accent}`}>{value}</p>
+    </div>
+  );
+}
+
+function LoadPolicyGraphCard({ label, value, accent = "text-gray-900" }: LoadPolicyGraphCard) {
+  const compact = value.length > 48;
+
+  return (
+    <div className="min-w-0 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <p className="mb-1 text-xs leading-snug text-gray-500">{label}</p>
+      <p
+        className={`break-words leading-snug [overflow-wrap:anywhere] ${
+          compact ? "text-sm font-medium" : "text-2xl font-semibold tabular-nums"
+        } ${accent}`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function LoadPolicyGraphCards({ payload }: { payload: unknown }) {
+  const cards = useMemo(() => buildLoadPolicyGraphCards(payload), [payload]);
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {cards.map((card, index) => (
+        <LoadPolicyGraphCard key={`${card.label}-${index}`} {...card} />
+      ))}
     </div>
   );
 }
@@ -463,6 +499,12 @@ export default function OciPolicyOptimizationPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<PolicyOptimizationItem | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [isLoadingPolicies, setIsLoadingPolicies] = useState(false);
+  const [loadPoliciesModal, setLoadPoliciesModal] = useState<
+    | { type: "success"; title: string; payload: unknown }
+    | { type: "error"; title: string; message: string }
+    | null
+  >(null);
   const detailsPanelWidth = 480;
 
   const configured = data?.configured ?? false;
@@ -532,6 +574,36 @@ export default function OciPolicyOptimizationPage() {
     });
   };
 
+  const handleLoadPolicies = async () => {
+    setIsLoadingPolicies(true);
+    setLoadPoliciesModal(null);
+    try {
+      const payload = await loadPolicyGraph();
+      setLoadPoliciesModal({
+        type: "success",
+        title: "Load Policies",
+        payload,
+      });
+    } catch (loadError) {
+      setLoadPoliciesModal({
+        type: "error",
+        title: "Load Policies Failed",
+        message:
+          loadError instanceof Error ? loadError.message : "Failed to load policies.",
+      });
+    } finally {
+      setIsLoadingPolicies(false);
+    }
+  };
+
+  const handleCloseLoadPoliciesModal = () => {
+    const shouldRefresh = loadPoliciesModal?.type === "success";
+    setLoadPoliciesModal(null);
+    if (shouldRefresh) {
+      void refetch();
+    }
+  };
+
   return (
     <div className="relative w-full min-w-0">
       <div
@@ -548,19 +620,35 @@ export default function OciPolicyOptimizationPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Policy Optimization</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 shrink-0"
-            aria-label="Refresh policy optimization data"
-          >
-            <RotateCw
-              className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
-              aria-hidden
-            />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void handleLoadPolicies()}
+              disabled={isLoadingPolicies || isFetching}
+              className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              aria-label="Load policies from OCI"
+            >
+              {isLoadingPolicies ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <FolderSync className="h-4 w-4" aria-hidden />
+              )}
+              Load Policies
+            </button>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching || isLoadingPolicies}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              aria-label="Refresh policy optimization data"
+            >
+              <RotateCw
+                className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
+                aria-hidden
+              />
+              Refresh
+            </button>
+          </div>
         </div>
         <p className="text-sm text-gray-600">
           Redundant and duplicate policy statements
@@ -855,6 +943,28 @@ export default function OciPolicyOptimizationPage() {
           onClose={() => setSelectedRow(null)}
         />
       )}
+
+      <Modal
+        open={loadPoliciesModal !== null}
+        title={loadPoliciesModal?.title ?? "Load Policies"}
+        onClose={handleCloseLoadPoliciesModal}
+        wide
+        footer={
+          <button
+            type="button"
+            onClick={handleCloseLoadPoliciesModal}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            OK
+          </button>
+        }
+      >
+        {loadPoliciesModal?.type === "error" ? (
+          <p className="text-red-700">{loadPoliciesModal.message}</p>
+        ) : loadPoliciesModal?.type === "success" ? (
+          <LoadPolicyGraphCards payload={loadPoliciesModal.payload} />
+        ) : null}
+      </Modal>
     </div>
   );
 }

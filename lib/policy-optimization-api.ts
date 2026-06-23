@@ -9,6 +9,10 @@ import type {
 export const POLICY_OPTIMIZATION_API_URL =
   "https://graph.keyforge.ai/ociservice/api/v1/ACMECOM/policy-optimization";
 
+/** KeyForge OCI policy graph load endpoint (ACMECOM tenant). */
+export const POLICY_GRAPH_LOAD_API_URL =
+  "https://graph.keyforge.ai/ociservice/api/v1/ACMECOM/policies/graph/load";
+
 export function isPolicyOptimizationApiConfigured(): boolean {
   return true;
 }
@@ -206,4 +210,137 @@ export async function fetchPolicyOptimizationRows(
 
   const payload = (await res.json()) as unknown;
   return parsePolicyOptimizationResponse(payload);
+}
+
+export async function loadPolicyGraph(
+  bearerToken?: string | null
+): Promise<unknown> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+
+  const token =
+    bearerToken?.trim() || process.env.POLICY_OPTIMIZATION_API_KEY?.trim();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(POLICY_GRAPH_LOAD_API_URL, {
+    method: "POST",
+    headers,
+    body: "{}",
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const err = new Error(parseApiError(text, res.status, res.statusText)) as Error & {
+      status?: number;
+    };
+    err.status = res.status;
+    throw err;
+  }
+
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+export type LoadPolicyGraphCard = {
+  label: string;
+  value: string;
+  accent?: string;
+};
+
+function humanizeLoadPolicyKey(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/^\w/, (char) => char.toUpperCase());
+}
+
+function formatLoadPolicyCardValue(value: unknown): string {
+  if (value == null) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return value.toLocaleString();
+  if (typeof value === "string") return value.trim() || "—";
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "None" : value.length.toLocaleString();
+  }
+  return JSON.stringify(value);
+}
+
+function pushLoadPolicyCards(
+  cards: LoadPolicyGraphCard[],
+  label: string,
+  value: unknown
+): void {
+  cards.push({
+    label,
+    value: formatLoadPolicyCardValue(value),
+    accent: typeof value === "number" ? "text-blue-700" : undefined,
+  });
+}
+
+export function buildLoadPolicyGraphCards(payload: unknown): LoadPolicyGraphCard[] {
+  if (payload == null || payload === "") {
+    return [{ label: "Status", value: "Policies loaded successfully." }];
+  }
+
+  if (typeof payload === "string") {
+    return [{ label: "Message", value: payload }];
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item, index) => {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        return Object.entries(item as Record<string, unknown>).map(([key, value]) => ({
+          label: `${humanizeLoadPolicyKey(key)} ${index + 1}`,
+          value: formatLoadPolicyCardValue(value),
+          accent: typeof value === "number" ? "text-blue-700" : undefined,
+        }));
+      }
+
+      return [
+        {
+          label: `Item ${index + 1}`,
+          value: formatLoadPolicyCardValue(item),
+        },
+      ];
+    });
+  }
+
+  if (typeof payload === "object") {
+    const cards: LoadPolicyGraphCard[] = [];
+
+    for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        for (const [nestedKey, nestedValue] of Object.entries(
+          value as Record<string, unknown>
+        )) {
+          pushLoadPolicyCards(
+            cards,
+            `${humanizeLoadPolicyKey(key)} · ${humanizeLoadPolicyKey(nestedKey)}`,
+            nestedValue
+          );
+        }
+        continue;
+      }
+
+      pushLoadPolicyCards(cards, humanizeLoadPolicyKey(key), value);
+    }
+
+    return cards.length > 0
+      ? cards
+      : [{ label: "Status", value: "Policies loaded successfully." }];
+  }
+
+  return [{ label: "Result", value: String(payload) }];
 }
