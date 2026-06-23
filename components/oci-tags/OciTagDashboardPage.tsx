@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { FolderSync, Loader2, RotateCw, Tags, WifiOff } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, FolderSync, Loader2, RotateCw, Tags, WifiOff } from "lucide-react";
 import Modal from "@/components/Modal";
 import { useOciTagDashboard } from "@/hooks/useOciTagDashboard";
 import { useOciTagDashboardTags } from "@/hooks/useOciTagDashboardTags";
@@ -66,9 +66,11 @@ const TAG_SECTION_STYLES = {
     accent: "bg-blue-500",
     title: "text-blue-900",
     count: "border-blue-200 bg-white text-blue-800",
-    th: "px-4 py-2.5 text-left text-[11px] font-semibold text-blue-800 uppercase tracking-wider bg-blue-50/80 border-b border-blue-100",
-    tagCell: "border-r border-gray-200",
-    resourceCell: "border-l-2 border-gray-300",
+    th: "whitespace-nowrap px-4 py-3.5 text-left text-[11px] font-semibold text-blue-800 uppercase tracking-wide align-middle bg-blue-50/80 border-b border-blue-100",
+    thExpand: "whitespace-nowrap px-2 py-3.5 text-center text-[11px] font-semibold text-blue-800 uppercase align-middle bg-blue-50/80 border-b border-blue-100",
+    td: "px-4 py-3 align-top text-sm leading-snug",
+    tdExpand: "px-2 py-3 align-top text-sm",
+    rowHover: "hover:bg-blue-50/50",
     label: "DEFINED TAGS",
     labelNote: "(Ignored Oracle_Tags)",
     empty: "No DEFINED tags found (Oracle_Tags excluded).",
@@ -79,13 +81,51 @@ const TAG_SECTION_STYLES = {
     accent: "bg-amber-500",
     title: "text-amber-950",
     count: "border-amber-200 bg-white text-amber-900",
-    th: "px-4 py-2.5 text-left text-[11px] font-semibold text-amber-900 uppercase tracking-wider bg-amber-50/70 border-b border-amber-100",
-    tagCell: "border-r border-gray-200",
-    resourceCell: "border-l-2 border-gray-300",
+    th: "whitespace-nowrap px-4 py-3.5 text-left text-[11px] font-semibold text-amber-900 uppercase tracking-wide align-middle bg-amber-50/70 border-b border-amber-100",
+    thExpand: "whitespace-nowrap px-2 py-3.5 text-center text-[11px] font-semibold text-amber-900 uppercase align-middle bg-amber-50/70 border-b border-amber-100",
+    td: "px-4 py-3 align-top text-sm leading-snug",
+    tdExpand: "px-2 py-3 align-top text-sm",
+    rowHover: "hover:bg-amber-50/50",
     label: "FREEFORM TAGS",
     empty: "No FREEFORM tags found.",
   },
 } as const;
+
+const DEFINED_TAG_COLUMNS = [
+  { width: "11%" },
+  { width: "10%" },
+  { width: "15%" },
+  { width: "10%" },
+  { width: "17%" },
+  { width: "12%" },
+  { width: "12%" },
+  { width: "13%" },
+] as const;
+
+const FREEFORM_TAG_COLUMNS = [
+  { width: "12%" },
+  { width: "18%" },
+  { width: "10%" },
+  { width: "20%" },
+  { width: "13%" },
+  { width: "12%" },
+  { width: "15%" },
+] as const;
+
+const EXPAND_COLUMN_WIDTH = "2.75rem";
+
+function TagTableColgroup({ showNamespace }: { showNamespace: boolean }) {
+  const columns = showNamespace ? DEFINED_TAG_COLUMNS : FREEFORM_TAG_COLUMNS;
+
+  return (
+    <colgroup>
+      {columns.map((column, index) => (
+        <col key={`${showNamespace ? "defined" : "freeform"}-col-${index}`} style={{ width: column.width }} />
+      ))}
+      <col style={{ width: EXPAND_COLUMN_WIDTH }} />
+    </colgroup>
+  );
+}
 
 function getTagResources(row: TagDashboardTagRow): TagDashboardTagResource[] {
   if (row.resources?.length) return row.resources;
@@ -121,6 +161,22 @@ function TagSectionTable({
   showNamespace?: boolean;
 }) {
   const styles = TAG_SECTION_STYLES[variant];
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const td = styles.td;
+  const tdExpand = styles.tdExpand;
+  const expandedRowClass = "bg-slate-50/70";
+
+  const toggleRow = (rowId: string) => {
+    setExpandedRows((current) => {
+      const next = new Set(current);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  };
 
   return (
     <section className={`overflow-hidden rounded-lg border bg-white shadow-sm ${styles.shell}`}>
@@ -147,9 +203,12 @@ function TagSectionTable({
         <p className="px-4 py-8 text-sm text-gray-600">{styles.empty}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-sm">
+          <table
+            className={`w-full table-fixed border-collapse text-sm ${showNamespace ? "min-w-[1180px]" : "min-w-[1080px]"}`}
+          >
+            <TagTableColgroup showNamespace={showNamespace} />
             <thead>
-              <tr>
+              <tr className="border-b-2 border-gray-200">
                 {showNamespace && (
                   <th scope="col" className={styles.th}>
                     Namespace
@@ -161,10 +220,10 @@ function TagSectionTable({
                 <th scope="col" className={styles.th}>
                   Value
                 </th>
-                <th scope="col" className={`${styles.th} border-r ${styles.tagCell}`}>
+                <th scope="col" className={styles.th}>
                   Resource count
                 </th>
-                <th scope="col" className={`${styles.th} ${styles.resourceCell}`}>
+                <th scope="col" className={styles.th}>
                   Display name
                 </th>
                 <th scope="col" className={styles.th}>
@@ -176,74 +235,97 @@ function TagSectionTable({
                 <th scope="col" className={styles.th}>
                   Time created
                 </th>
+                <th scope="col" className={styles.thExpand} aria-label="Expand">
+                  <span className="sr-only">Expand</span>
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {rows.flatMap((row) => {
+            <tbody className="divide-y divide-gray-200">
+              {rows.map((row) => {
                 const resources = getTagResources(row);
-                const span = resources.length;
-                const hasMultipleResources = span > 1;
+                const isMultiResource = resources.length > 1;
+                const isExpanded = expandedRows.has(row.id);
+                const resource = resources[0] ?? {};
 
-                return resources.map((resource, resourceIndex) => {
-                  const isLastResourceInTag = resourceIndex === resources.length - 1;
-                  const isContinuationRow = resourceIndex > 0;
-                  const resourceRowClass = [
-                    "bg-white",
-                    isContinuationRow ? "border-t border-gray-200" : "",
-                    isLastResourceInTag ? "border-b-2 border-gray-300" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
-
-                  return (
-                    <tr key={`${row.id}-${resourceIndex}`} className={resourceRowClass}>
-                      {resourceIndex === 0 && (
+                return (
+                  <Fragment key={row.id}>
+                    <tr
+                      className={isMultiResource ? `cursor-pointer ${styles.rowHover}` : "bg-white"}
+                      onClick={isMultiResource ? () => toggleRow(row.id) : undefined}
+                    >
+                      {showNamespace && (
+                        <td className={`${td} text-gray-800`}>{row.namespace}</td>
+                      )}
+                      <td className={`${td} font-medium text-gray-900`}>{row.key}</td>
+                      <td className={`${td} break-words text-gray-700 [overflow-wrap:anywhere]`}>
+                        {row.value}
+                      </td>
+                      <td className={`${td} tabular-nums text-gray-600`}>
+                        {row.resourceCount ?? resources.length ?? ""}
+                      </td>
+                      {isMultiResource ? (
                         <>
-                          {showNamespace && (
-                            <td
-                              rowSpan={span}
-                              className={`px-4 py-2.5 align-top text-gray-800 ${styles.tagCell}`}
-                            >
-                              {row.namespace}
-                            </td>
-                          )}
-                          <td
-                            rowSpan={span}
-                            className={`px-4 py-2.5 align-top font-medium text-gray-900 ${styles.tagCell}`}
-                          >
-                            {row.key}
+                          <td className={`${td} text-gray-500`}>
+                            {resources.length} resources
                           </td>
-                          <td
-                            rowSpan={span}
-                            className={`px-4 py-2.5 align-top break-words text-gray-700 [overflow-wrap:anywhere] ${styles.tagCell}`}
-                          >
-                            {row.value}
+                          <td className={td} />
+                          <td className={td} />
+                          <td className={td} />
+                        </>
+                      ) : (
+                        <>
+                          <td className={`${td} font-medium text-gray-900`}>
+                            {resource.displayName ?? ""}
                           </td>
-                          <td
-                            rowSpan={span}
-                            className={`px-4 py-2.5 align-top tabular-nums text-gray-600 ${styles.tagCell}`}
-                          >
-                            {row.resourceCount ?? "—"}
+                          <td className={`${td} text-gray-600`}>
+                            {resource.resourceType ?? ""}
+                          </td>
+                          <td className={`${td} text-gray-600`}>
+                            {resource.lifecycleState ?? ""}
+                          </td>
+                          <td className={`${td} whitespace-nowrap text-gray-600`}>
+                            {resource.timeCreated ?? ""}
                           </td>
                         </>
                       )}
-                      <td
-                        className={`px-4 py-2.5 font-medium text-gray-900 ${
-                          hasMultipleResources || resourceIndex === 0 ? styles.resourceCell : ""
-                        }`}
-                      >
-                        {resource.displayName ?? "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-600">{resource.resourceType ?? "—"}</td>
-                      <td className="px-4 py-2.5 text-gray-600">
-                        {resource.lifecycleState ?? "—"}
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-gray-600">
-                        {resource.timeCreated ?? "—"}
+                      <td className={`${tdExpand} text-center text-gray-500`}>
+                        {isMultiResource ? (
+                          isExpanded ? (
+                            <ChevronUp className="mx-auto h-5 w-5" aria-hidden />
+                          ) : (
+                            <ChevronDown className="mx-auto h-5 w-5" aria-hidden />
+                          )
+                        ) : null}
                       </td>
                     </tr>
-                  );
-                });
+                    {isMultiResource &&
+                      isExpanded &&
+                      resources.map((expandedResource, resourceIndex) => (
+                        <tr
+                          key={`${row.id}-resource-${resourceIndex}`}
+                          className={expandedRowClass}
+                        >
+                          {showNamespace && <td className={td} />}
+                          <td className={td} />
+                          <td className={td} />
+                          <td className={td} />
+                          <td className={`${td} font-medium text-gray-900`}>
+                            {expandedResource.displayName ?? ""}
+                          </td>
+                          <td className={`${td} text-gray-600`}>
+                            {expandedResource.resourceType ?? ""}
+                          </td>
+                          <td className={`${td} text-gray-600`}>
+                            {expandedResource.lifecycleState ?? ""}
+                          </td>
+                          <td className={`${td} whitespace-nowrap text-gray-600`}>
+                            {expandedResource.timeCreated ?? ""}
+                          </td>
+                          <td className={tdExpand} />
+                        </tr>
+                      ))}
+                  </Fragment>
+                );
               })}
             </tbody>
           </table>
