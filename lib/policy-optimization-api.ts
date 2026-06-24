@@ -181,6 +181,53 @@ function parseApiError(text: string, status: number, statusText: string): string
   return text;
 }
 
+export function policyOptimizationScopesUrl(policyName: string): string {
+  return `${POLICY_OPTIMIZATION_API_URL}/scopes/${encodeURIComponent(policyName.trim())}`;
+}
+
+export async function fetchPolicyOptimizationScopes(
+  policyName: string,
+  bearerToken?: string | null
+): Promise<unknown> {
+  const trimmedName = policyName.trim();
+  if (!trimmedName) {
+    throw new Error("Policy name is required to load scopes.");
+  }
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+
+  const token =
+    bearerToken?.trim() || process.env.POLICY_OPTIMIZATION_API_KEY?.trim();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(policyOptimizationScopesUrl(trimmedName), {
+    headers,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const err = new Error(parseApiError(text, res.status, res.statusText)) as Error & {
+      status?: number;
+    };
+    err.status = res.status;
+    throw err;
+  }
+
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
 export async function fetchPolicyOptimizationRows(
   bearerToken?: string | null
 ): Promise<PolicyOptimizationResult> {

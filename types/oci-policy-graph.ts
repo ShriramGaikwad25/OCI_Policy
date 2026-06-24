@@ -1,6 +1,7 @@
 export type OciGraphNodeKind =
   | "Policy"
   | "PolicyStatement"
+  | "StatementType"
   | "Group"
   | "Action"
   | "ResourceType"

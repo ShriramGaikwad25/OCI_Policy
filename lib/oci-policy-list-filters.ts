@@ -2,6 +2,7 @@ import type { PolicyListFilters, PolicyListItem } from "@/types/oci-policy";
 
 export const EMPTY_POLICY_LIST_FILTERS: PolicyListFilters = {
   risk: "",
+  compartment: "",
   status: "",
   dateFrom: "",
   dateTo: "",
@@ -16,8 +17,15 @@ function parseFilterDate(value: string): number | null {
 function policyFilterDate(policy: PolicyListItem): number | null {
   const raw = policy.createdOn || policy.lastModified;
   if (!raw) return null;
-  const time = new Date(raw).getTime();
-  return Number.isNaN(time) ? null : time;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
+}
+
+function policyMatchesCompartment(policy: PolicyListItem, compartment: string): boolean {
+  if (!compartment) return true;
+  if (policy.compartment === compartment) return true;
+  return (policy.compartments ?? []).includes(compartment);
 }
 
 export function collectPolicyStatusOptions(policies: PolicyListItem[]): string[] {
@@ -26,6 +34,19 @@ export function collectPolicyStatusOptions(policies: PolicyListItem[]): string[]
     if (policy.status) statuses.add(policy.status);
   }
   return Array.from(statuses).sort((a, b) => a.localeCompare(b));
+}
+
+export function collectPolicyCompartmentOptions(policies: PolicyListItem[]): string[] {
+  const compartments = new Set<string>();
+  for (const policy of policies) {
+    if (policy.compartment && policy.compartment !== "—") {
+      compartments.add(policy.compartment);
+    }
+    for (const compartment of policy.compartments ?? []) {
+      if (compartment && compartment !== "—") compartments.add(compartment);
+    }
+  }
+  return Array.from(compartments).sort((a, b) => a.localeCompare(b));
 }
 
 export function applyPolicyListFilters(
@@ -37,6 +58,7 @@ export function applyPolicyListFilters(
 
   return policies.filter((policy) => {
     if (filters.risk && policy.risk !== filters.risk) return false;
+    if (!policyMatchesCompartment(policy, filters.compartment)) return false;
     if (filters.status && policy.status !== filters.status) return false;
 
     if (fromTime != null || toTime != null) {
@@ -51,5 +73,7 @@ export function applyPolicyListFilters(
 }
 
 export function hasActivePolicyListFilters(filters: PolicyListFilters): boolean {
-  return Boolean(filters.risk || filters.status || filters.dateFrom || filters.dateTo);
+  return Boolean(
+    filters.risk || filters.compartment || filters.status || filters.dateFrom || filters.dateTo
+  );
 }

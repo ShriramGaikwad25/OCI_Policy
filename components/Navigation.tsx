@@ -92,24 +92,39 @@ export function Navigation() {
 
   const getBackConfig = (): { href: string; label: string } | null => {
     const path = normalizePath(pathname);
-    const dashboardHref = "/oci-policy-analysis/policy-optimization";
-    const backLabel = "Back to Policies";
+    const dashboardHref = "/oci-policy-analysis";
+    const policyGraphPattern = /^\/oci-policy-analysis\/policies\/[^/]+\/graph$/;
+    const compartmentsTreePath = "/oci-policy-analysis/compartments";
+
+    if (policyGraphPattern.test(path)) {
+      return { href: dashboardHref, label: "Back to Policy Dashboard" };
+    }
+
+    if (path === compartmentsTreePath) {
+      return { href: dashboardHref, label: "Back to Policy Dashboard" };
+    }
 
     if (
       path === "/oci-policy-analysis/policy-findings" ||
       path === "/oci-policy-analysis/all-findings"
     ) {
-      return { href: dashboardHref, label: backLabel };
+      return { href: dashboardHref, label: "Back to Policies" };
     }
 
     const tenant = parseTenantFromPathname(path);
     if (tenant) {
       const suffix = path.slice(`/${tenant}`.length);
+      if (policyGraphPattern.test(suffix)) {
+        return { href: `/${tenant}${dashboardHref}`, label: "Back to Policy Dashboard" };
+      }
+      if (suffix === compartmentsTreePath) {
+        return { href: `/${tenant}${dashboardHref}`, label: "Back to Policy Dashboard" };
+      }
       if (
         suffix === "/oci-policy-analysis/policy-findings" ||
         suffix === "/oci-policy-analysis/all-findings"
       ) {
-        return { href: `/${tenant}${dashboardHref}`, label: backLabel };
+        return { href: `/${tenant}${dashboardHref}`, label: "Back to Policies" };
       }
     }
 

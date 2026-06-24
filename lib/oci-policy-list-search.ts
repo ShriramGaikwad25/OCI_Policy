@@ -13,6 +13,7 @@ function policyListSearchHaystack(policy: PolicyListItem): string {
       policy.status,
       ...(policy.groups ?? []),
       ...(policy.compartments ?? []),
+      ...(policy.statements ?? []).map((statement) => statement.text),
     ].join(" ")
   );
 }

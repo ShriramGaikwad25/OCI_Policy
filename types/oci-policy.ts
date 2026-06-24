@@ -43,13 +43,65 @@ export interface PolicyListItem {
   highCount: number;
   mediumCount: number;
   lowCount: number;
+  statements: PolicyListStatement[];
+}
+
+export interface PolicyStatementSubject {
+  kind: string;
+  name: string;
+}
+
+export interface PolicyListStatement {
+  id: string;
+  ref?: string;
+  text: string;
+  type?: string;
+  subjects?: PolicyStatementSubject[];
+  verb?: string;
+  resource?: string;
+  compartmentName?: string;
+  condition?: string | null;
 }
 
 export interface PolicyListFilters {
   risk: "" | PolicyListRisk;
+  compartment: string;
   status: string;
   dateFrom: string;
   dateTo: string;
+}
+
+export interface PolicyListResult {
+  policies: PolicyListItem[];
+  tenancyId: string | null;
+  tenancyName: string | null;
+  tenancies: OciTenancy[];
+  analytics: PolicyListAnalytics | null;
+}
+
+export interface OciTenancy {
+  id: string;
+  name: string;
+  label: string;
+}
+
+export interface PolicySubjectsByKind {
+  DYNAMIC_GROUP: number;
+  GROUP: number;
+  SERVICE: number;
+  UNKNOWN: number;
+}
+
+export interface PolicyListAnalytics {
+  totalPolicies: number;
+  totalStatements: number;
+  distinctSubjects: number;
+  subjectsByKind: PolicySubjectsByKind;
+  distinctCompartments: number;
+  distinctResources: number;
+  conditionalPolicies: number;
+  conditionalStatements: number;
+  unparsableStatements: number;
 }
 
 export interface PolicyOptimizationGrant {
@@ -209,4 +261,48 @@ export interface PolicyIncomingSimulationConflictRow {
   policy: string;
   statementId: string;
   fullText: string;
+}
+
+export interface PolicyScopeSubject {
+  kind: string;
+  name: string;
+}
+
+export interface PolicyScopeDefinedTag {
+  namespace: string;
+  key: string;
+  value: string;
+}
+
+export interface PolicyScopeFreeformTag {
+  key: string;
+  value: string;
+}
+
+export interface PolicyScopeResource {
+  compartmentName: string;
+  displayName: string;
+  resourceType: string;
+  lifecycleState: string;
+  definedTags: PolicyScopeDefinedTag[];
+  freeformTags: PolicyScopeFreeformTag[];
+}
+
+export interface PolicyScopeCompartment {
+  compartmentName: string;
+  count: number;
+  resources: PolicyScopeResource[];
+}
+
+export interface PolicyScopeView {
+  subject: PolicyScopeSubject | null;
+  verb: string | null;
+  resource: string | null;
+  coverage: string | null;
+  groupsInScope: string[];
+  compartmentsInScope: PolicyScopeCompartment[];
+  resourcesInScope: PolicyScopeResource[];
+  resourceCount: number | null;
+  notes: string | null;
+  residualConstraints: string[];
 }
