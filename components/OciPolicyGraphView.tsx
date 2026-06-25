@@ -128,6 +128,14 @@ export function OciPolicyGraphView({
     [graph]
   );
 
+  const nodeCountsByKind = useMemo(() => {
+    const counts = new Map<OciGraphNodeKind, number>();
+    for (const node of forceData.nodes) {
+      counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1);
+    }
+    return counts;
+  }, [forceData.nodes]);
+
   useEffect(() => {
     hasFitRef.current = false;
   }, [forceData]);
@@ -256,21 +264,7 @@ export function OciPolicyGraphView({
             Showing first {graph.meta.statementLimit} statements
           </span>
         )}
-        <div className="hidden xl:flex flex-wrap items-center gap-2 ml-auto">
-          {LEGEND.map(({ kind, label }) => (
-            <span
-              key={kind}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600"
-            >
-              <span
-                className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: GRAPH_NODE_COLORS[kind] }}
-              />
-              {label}
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-1 xl:ml-0 ml-auto">
+        <div className="ml-auto flex gap-1">
           <button
             type="button"
             onClick={() => handleZoom(1.25)}
@@ -297,6 +291,29 @@ export function OciPolicyGraphView({
           </button>
         </div>
       </div>
+
+      {!isLoading && !isError && forceData.nodes.length > 0 ? (
+        <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
+          <span className="text-xs font-medium text-gray-500">Counts:</span>
+          {LEGEND.map(({ kind, label }) => {
+            const count = nodeCountsByKind.get(kind) ?? 0;
+            if (count === 0) return null;
+            return (
+              <span
+                key={kind}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-700"
+              >
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: GRAPH_NODE_COLORS[kind] }}
+                />
+                <span>{label}</span>
+                <span className="font-bold tabular-nums text-gray-900">{count}</span>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div
         ref={containerRef}
@@ -377,9 +394,20 @@ export function OciPolicyGraphView({
       </div>
 
       {graph && !isLoading && (
-        <div className="shrink-0 px-4 py-2.5 border-t border-gray-200 text-xs text-gray-500 tabular-nums">
-          {graph.nodes.length} nodes · {graph.links.length} relationships · hover for details · drag
-          to rearrange · scroll to zoom
+        <div className="shrink-0 border-t border-gray-200 px-4 py-2.5 text-xs text-gray-500 tabular-nums">
+          <span>
+            {graph.nodes.length} nodes · {graph.links.length} relationships
+          </span>
+          {nodeCountsByKind.size > 0 ? (
+            <span className="mt-1 block text-gray-600">
+              {LEGEND.filter(({ kind }) => (nodeCountsByKind.get(kind) ?? 0) > 0)
+                .map(({ kind, label }) => `${label} ${nodeCountsByKind.get(kind)}`)
+                .join(" · ")}
+            </span>
+          ) : null}
+          <span className="mt-1 block text-gray-400">
+            Hover for details · drag to rearrange · scroll to zoom
+          </span>
         </div>
       )}
     </div>

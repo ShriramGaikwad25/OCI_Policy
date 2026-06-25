@@ -1,9 +1,10 @@
-import type { PolicyListFilters, PolicyListItem } from "@/types/oci-policy";
+import type { PolicyListDateField, PolicyListFilters, PolicyListItem } from "@/types/oci-policy";
 
 export const EMPTY_POLICY_LIST_FILTERS: PolicyListFilters = {
   risk: "",
   compartment: "",
   status: "",
+  dateField: "",
   dateFrom: "",
   dateTo: "",
 };
@@ -14,12 +15,28 @@ function parseFilterDate(value: string): number | null {
   return Number.isNaN(time) ? null : time;
 }
 
-function policyFilterDate(policy: PolicyListItem): number | null {
-  const raw = policy.createdOn || policy.lastModified;
-  if (!raw) return null;
-  const parsed = new Date(raw);
+function parsePolicyDate(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
+}
+
+function policyMatchesDateRange(
+  policy: PolicyListItem,
+  field: PolicyListDateField,
+  fromTime: number | null,
+  toTime: number | null
+): boolean {
+  if (!field) return true;
+
+  const raw = policy.createdOn;
+  const policyTime = parsePolicyDate(raw);
+  if (policyTime == null) return false;
+
+  if (fromTime != null && policyTime < fromTime) return false;
+  if (toTime != null && policyTime > toTime + 86_399_999) return false;
+  return true;
 }
 
 function policyMatchesCompartment(policy: PolicyListItem, compartment: string): boolean {
@@ -61,11 +78,12 @@ export function applyPolicyListFilters(
     if (!policyMatchesCompartment(policy, filters.compartment)) return false;
     if (filters.status && policy.status !== filters.status) return false;
 
-    if (fromTime != null || toTime != null) {
-      const policyTime = policyFilterDate(policy);
-      if (policyTime == null) return false;
-      if (fromTime != null && policyTime < fromTime) return false;
-      if (toTime != null && policyTime > toTime + 86_399_999) return false;
+    if (
+      filters.dateField &&
+      (fromTime != null || toTime != null) &&
+      !policyMatchesDateRange(policy, filters.dateField, fromTime, toTime)
+    ) {
+      return false;
     }
 
     return true;
@@ -74,6 +92,9 @@ export function applyPolicyListFilters(
 
 export function hasActivePolicyListFilters(filters: PolicyListFilters): boolean {
   return Boolean(
-    filters.risk || filters.compartment || filters.status || filters.dateFrom || filters.dateTo
+    filters.risk ||
+      filters.compartment ||
+      filters.status ||
+      (filters.dateField && (filters.dateFrom || filters.dateTo))
   );
 }

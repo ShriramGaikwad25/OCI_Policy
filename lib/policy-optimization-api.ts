@@ -39,6 +39,19 @@ interface PolicyOptimizationApiResponse {
   data?: PolicyOptimizationItem[];
 }
 
+function normalizeOptimizationType(type: string): string {
+  const normalized = type.trim().toUpperCase().replace(/\s+/g, "_");
+  if (normalized === "OVER_BROAD") return "OVER_PRIVILEGED";
+  return type;
+}
+
+function normalizeOptimizationRows(rows: PolicyOptimizationItem[]): PolicyOptimizationItem[] {
+  return rows.map((row) => ({
+    ...row,
+    optimizationType: normalizeOptimizationType(row.optimizationType),
+  }));
+}
+
 function extractConditionFromRaw(raw: string): string | null {
   const match = raw.match(/\bwhere\b(.+)$/i);
   return match ? match[1].trim() : null;
@@ -120,7 +133,7 @@ export function mapFindingsToRows(findings: PolicyOptimizationFinding[]): Policy
       compartmentTitle: compartmentFields.compartmentTitle,
       compartmentOcid: compartmentFields.compartmentOcid,
       condition: firstGrant ? extractConditionFromRaw(firstGrant.raw) : null,
-      optimizationType: finding.type,
+      optimizationType: normalizeOptimizationType(finding.type),
       reason: finding.reason,
       coveredByStatement: coveredBy[0]?.ref ?? null,
       recommendation: finding.suggestedAction,
@@ -133,10 +146,24 @@ export function mapFindingsToRows(findings: PolicyOptimizationFinding[]): Policy
   });
 }
 
+function normalizePolicyOptimizationSummary(
+  summary: PolicyOptimizationSummary | undefined
+): PolicyOptimizationSummary | null {
+  if (!summary) return null;
+
+  const legacy = summary as PolicyOptimizationSummary & { overBroad?: number };
+  const overPrivileged = summary.overPrivileged ?? legacy.overBroad ?? 0;
+
+  return {
+    ...summary,
+    overPrivileged,
+  };
+}
+
 function parsePolicyOptimizationResponse(payload: unknown): PolicyOptimizationResult {
   if (Array.isArray(payload)) {
     return {
-      rows: payload as PolicyOptimizationItem[],
+      rows: normalizeOptimizationRows(payload as PolicyOptimizationItem[]),
       summary: null,
       tenancyName: null,
     };
@@ -151,17 +178,25 @@ function parsePolicyOptimizationResponse(payload: unknown): PolicyOptimizationRe
   if (Array.isArray(record.findings)) {
     return {
       rows: mapFindingsToRows(record.findings),
-      summary: record.summary ?? null,
+      summary: normalizePolicyOptimizationSummary(record.summary ?? undefined),
       tenancyName: record.tenancyName ?? null,
     };
   }
 
   if (Array.isArray(record.rows)) {
-    return { rows: record.rows, summary: record.summary ?? null, tenancyName: record.tenancyName ?? null };
+    return {
+      rows: normalizeOptimizationRows(record.rows),
+      summary: normalizePolicyOptimizationSummary(record.summary ?? undefined),
+      tenancyName: record.tenancyName ?? null,
+    };
   }
 
   if (Array.isArray(record.data)) {
-    return { rows: record.data, summary: record.summary ?? null, tenancyName: record.tenancyName ?? null };
+    return {
+      rows: normalizeOptimizationRows(record.data),
+      summary: normalizePolicyOptimizationSummary(record.summary ?? undefined),
+      tenancyName: record.tenancyName ?? null,
+    };
   }
 
   throw new Error("Policy optimization API returned an unexpected response shape");

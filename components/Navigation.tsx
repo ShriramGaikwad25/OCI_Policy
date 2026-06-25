@@ -94,10 +94,16 @@ export function Navigation() {
     const path = normalizePath(pathname);
     const dashboardHref = "/oci-policy-analysis";
     const policyGraphPattern = /^\/oci-policy-analysis\/policies\/[^/]+\/graph$/;
+    const groupAccessDetailPattern = /^\/oci-policy-analysis\/group-access\/[^/]+$/;
     const compartmentsTreePath = "/oci-policy-analysis/compartments";
+    const groupAccessHref = "/oci-policy-analysis/group-access";
 
     if (policyGraphPattern.test(path)) {
       return { href: dashboardHref, label: "Back to Policy Dashboard" };
+    }
+
+    if (groupAccessDetailPattern.test(path)) {
+      return { href: groupAccessHref, label: "Back to Group Access" };
     }
 
     if (path === compartmentsTreePath) {
@@ -116,6 +122,9 @@ export function Navigation() {
       const suffix = path.slice(`/${tenant}`.length);
       if (policyGraphPattern.test(suffix)) {
         return { href: `/${tenant}${dashboardHref}`, label: "Back to Policy Dashboard" };
+      }
+      if (groupAccessDetailPattern.test(suffix)) {
+        return { href: `/${tenant}${groupAccessHref}`, label: "Back to Group Access" };
       }
       if (suffix === compartmentsTreePath) {
         return { href: `/${tenant}${dashboardHref}`, label: "Back to Policy Dashboard" };

@@ -61,12 +61,16 @@ export interface PolicyListStatement {
   resource?: string;
   compartmentName?: string;
   condition?: string | null;
+  risk?: PolicyListRisk;
 }
+
+export type PolicyListDateField = "" | "createdOn";
 
 export interface PolicyListFilters {
   risk: "" | PolicyListRisk;
   compartment: string;
   status: string;
+  dateField: PolicyListDateField;
   dateFrom: string;
   dateTo: string;
 }
@@ -102,6 +106,7 @@ export interface PolicyListAnalytics {
   conditionalPolicies: number;
   conditionalStatements: number;
   unparsableStatements: number;
+  highRiskStatements: number;
 }
 
 export interface PolicyOptimizationGrant {
@@ -138,7 +143,7 @@ export interface PolicyOptimizationSummary {
   duplicates: number;
   redundant: number;
   consolidations: number;
-  overBroad: number;
+  overPrivileged: number;
   deadConditions: number;
   autoSafe: number;
   review: number;

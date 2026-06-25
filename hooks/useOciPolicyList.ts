@@ -6,6 +6,10 @@ import {
   fetchPolicyList,
   isPolicyListApiConfigured,
 } from "@/lib/policy-list-api";
+import {
+  enrichPolicyListAnalytics,
+  enrichPolicyListItems,
+} from "@/lib/oci-policy-list-enrichment";
 import type { PolicyListAnalytics, PolicyListItem, OciTenancy } from "@/types/oci-policy";
 
 export type PolicyListResponse = {
@@ -19,16 +23,20 @@ export type PolicyListResponse = {
 
 async function fetchPolicies(tenancyId?: string | null): Promise<PolicyListResponse> {
   const result = await fetchPolicyList(undefined, tenancyId);
-  return {
-    configured: isPolicyListApiConfigured(),
-    policies: result.policies.map((policy) => ({
+  const policies = enrichPolicyListItems(
+    result.policies.map((policy) => ({
       ...policy,
       statements: policy.statements ?? [],
-    })),
+    }))
+  );
+
+  return {
+    configured: isPolicyListApiConfigured(),
+    policies,
     tenancyId: result.tenancyId,
     tenancyName: result.tenancyName,
     tenancies: result.tenancies,
-    analytics: result.analytics,
+    analytics: enrichPolicyListAnalytics(result.analytics, policies),
   };
 }
 
@@ -36,7 +44,7 @@ export function useOciPolicyList(tenancyId?: string | null) {
   const normalizedTenancyId = tenancyId?.trim() || null;
 
   return useQuery({
-    queryKey: ["oci-policies", buildPolicyListUrl(normalizedTenancyId), "v6"],
+    queryKey: ["oci-policies", buildPolicyListUrl(normalizedTenancyId), "v8"],
     queryFn: () => fetchPolicies(normalizedTenancyId),
     staleTime: 30_000,
   });

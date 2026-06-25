@@ -27,12 +27,25 @@ function readResourceCount(record: Record<string, unknown>): number | null {
     record.resource_count ??
     record.count ??
     record.totalResources ??
-    record.total_resources;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+    record.total_resources ??
+    record.numResources ??
+    record.num_resources;
+
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
   if (typeof value === "string" && value.trim()) {
     const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
+
+  const resources = record.resources ?? record.resourceItems ?? record.items;
+  if (Array.isArray(resources) && resources.length > 0) return resources.length;
+
+  const stats = record.stats ?? record.summary;
+  if (isRecord(stats)) {
+    const nested = readResourceCount(stats);
+    if (nested != null) return nested;
+  }
+
   return null;
 }
 
@@ -92,11 +105,17 @@ function parseCompartmentNode(record: Record<string, unknown>, index: number): C
         .map((child, childIndex) => parseCompartmentNode(child, childIndex))
     : [];
 
+  let resourceCount = readResourceCount(record);
+  const resourceType = readResourceType(record);
+  if (resourceCount == null && children.length === 0 && resourceType) {
+    resourceCount = 1;
+  }
+
   return {
     id: readNodeId(record, `compartment-${index}`),
     name: readNodeName(record, `Compartment ${index + 1}`),
-    resourceCount: readResourceCount(record),
-    resourceType: readResourceType(record),
+    resourceCount,
+    resourceType,
     children,
   };
 }
@@ -278,4 +297,41 @@ export function collectCompartmentPaths(
 
 export function sumPathResourceCounts(path: CompartmentTreeNode[]): number {
   return path.reduce((sum, node) => sum + (node.resourceCount ?? 0), 0);
+}
+
+export function formatCompartmentCount(count: number): string {
+  if (count > 999_999) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count > 999) return `${Math.round(count / 1000)}k`;
+  return String(count);
+}
+
+/** Resource count on the node, or aggregated from descendants when the node has none. */
+export function getCompartmentDisplayCount(node: CompartmentTreeNode): number | null {
+  if (node.resourceCount != null && node.resourceCount > 0) {
+    return node.resourceCount;
+  }
+
+  if (node.children.length === 0) {
+    return null;
+  }
+
+  const childTotal = node.children.reduce(
+    (sum, child) => sum + (getCompartmentDisplayCount(child) ?? 0),
+    0
+  );
+  return childTotal > 0 ? childTotal : null;
+}
+
+/** Shown when no resource count is available (e.g. parent with child compartments only). */
+export function getCompartmentSecondaryCount(
+  node: CompartmentTreeNode
+): { value: number; title: string } | null {
+  if (getCompartmentDisplayCount(node) != null) return null;
+  if (node.children.length > 0) {
+    return {
+      value: node.children.length,
+      title: `${node.children.length} sub-compartments`,
+    };
+  }
+  return null;
 }

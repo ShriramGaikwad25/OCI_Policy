@@ -1,15 +1,44 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import type { PolicyListStatement } from "@/types/oci-policy";
+import {
+  getPolicyStatementDisplayFields,
+  GRAPH_NODE_KIND_LABELS,
+} from "@/lib/oci-policy-graph";
+import type { PolicyListRisk, PolicyListStatement } from "@/types/oci-policy";
+import { assignDemoStatementRisk } from "@/lib/oci-policy-list-enrichment";
 
 const ACTION_COLUMN_WIDTH = "3.25rem";
+const WRAP_CELL = "whitespace-normal break-words [overflow-wrap:anywhere]";
 const STATEMENT_TH =
-  "px-3 py-2 text-left text-[11px] font-semibold text-blue-800 uppercase tracking-wide bg-blue-50/80 border-b border-blue-100";
+  "px-3 py-2 text-left text-[11px] font-semibold text-blue-800 uppercase tracking-wide bg-blue-50/80 border-b border-blue-100 whitespace-normal break-words";
 const STATEMENT_TH_CENTER = `${STATEMENT_TH} text-center`;
-const STATEMENT_TH_ACTION = `${STATEMENT_TH} text-right`;
-const STATEMENT_TD = "px-3 py-2.5 align-top bg-white";
-const STATEMENT_TD_ACTION = "px-3 py-2.5 align-top text-right bg-white";
+const STATEMENT_TH_ACTION = `${STATEMENT_TH} text-right whitespace-nowrap`;
+const STATEMENT_TD = `px-3 py-2.5 align-top bg-white text-sm text-slate-800 ${WRAP_CELL}`;
+const STATEMENT_TD_MUTED = `${STATEMENT_TD} text-slate-600`;
+const STATEMENT_TD_ACTION = "px-3 py-2.5 align-top text-right bg-white whitespace-nowrap";
+
+function StatementFieldCell({ value }: { value: string }) {
+  if (value === "—") {
+    return <span className="text-slate-400">—</span>;
+  }
+
+  return <span className="break-words [overflow-wrap:anywhere]">{value}</span>;
+}
+
+function statementRiskClass(risk: PolicyListRisk): string {
+  if (risk === "High") return "text-red-700 font-semibold";
+  if (risk === "Medium") return "text-yellow-600 font-semibold";
+  return "text-green-700 font-semibold";
+}
+
+function statementRisk(
+  policyName: string,
+  index: number,
+  statement: PolicyListStatement
+): PolicyListRisk {
+  return statement.risk ?? assignDemoStatementRisk(policyName, index);
+}
 
 export function formatStatementRef(ref: string | undefined, index: number): string {
   if (!ref) return String(index + 1);
@@ -53,8 +82,15 @@ export function PolicyStatementsPanel({
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col style={{ width: "3.5rem" }} />
+              <col style={{ width: "2.75rem" }} />
               <col />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "7%" }} />
               <col style={{ width: ACTION_COLUMN_WIDTH }} />
             </colgroup>
             <thead>
@@ -63,7 +99,28 @@ export function PolicyStatementsPanel({
                   #
                 </th>
                 <th scope="col" className={STATEMENT_TH}>
-                  Statement
+                  {GRAPH_NODE_KIND_LABELS.PolicyStatement}
+                </th>
+                <th scope="col" className={STATEMENT_TH}>
+                  {GRAPH_NODE_KIND_LABELS.Condition}
+                </th>
+                <th scope="col" className={STATEMENT_TH}>
+                  {GRAPH_NODE_KIND_LABELS.Compartment}
+                </th>
+                <th scope="col" className={STATEMENT_TH}>
+                  {GRAPH_NODE_KIND_LABELS.StatementType}
+                </th>
+                <th scope="col" className={STATEMENT_TH}>
+                  {GRAPH_NODE_KIND_LABELS.ResourceType}
+                </th>
+                <th scope="col" className={STATEMENT_TH}>
+                  {GRAPH_NODE_KIND_LABELS.Group}
+                </th>
+                <th scope="col" className={STATEMENT_TH}>
+                  {GRAPH_NODE_KIND_LABELS.Action}
+                </th>
+                <th scope="col" className={STATEMENT_TH_CENTER}>
+                  Risk
                 </th>
                 <th scope="col" className={STATEMENT_TH_ACTION} aria-label="View scopes">
                   <span className="sr-only">View scopes</span>
@@ -73,6 +130,8 @@ export function PolicyStatementsPanel({
             <tbody>
               {statements.map((statement, index) => {
                 const isSelected = selectedStatementIndex === index;
+                const fields = getPolicyStatementDisplayFields(statement);
+                const risk = statementRisk(policyName, index, statement);
 
                 return (
                   <tr
@@ -109,6 +168,27 @@ export function PolicyStatementsPanel({
                       >
                         {statement.text}
                       </pre>
+                    </td>
+                    <td className={STATEMENT_TD_MUTED}>
+                      <StatementFieldCell value={fields.condition} />
+                    </td>
+                    <td className={STATEMENT_TD_MUTED}>
+                      <StatementFieldCell value={fields.compartment} />
+                    </td>
+                    <td className={STATEMENT_TD_MUTED}>
+                      <StatementFieldCell value={fields.type} />
+                    </td>
+                    <td className={STATEMENT_TD_MUTED}>
+                      <StatementFieldCell value={fields.resource} />
+                    </td>
+                    <td className={STATEMENT_TD_MUTED}>
+                      <StatementFieldCell value={fields.subject} />
+                    </td>
+                    <td className={STATEMENT_TD_MUTED}>
+                      <StatementFieldCell value={fields.verb} />
+                    </td>
+                    <td className={`${STATEMENT_TD} text-center whitespace-nowrap ${statementRiskClass(risk)}`}>
+                      {risk}
                     </td>
                     <td className={STATEMENT_TD_ACTION}>
                       <span

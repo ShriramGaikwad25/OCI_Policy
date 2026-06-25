@@ -93,15 +93,79 @@ function addLink(
   links.push({ source, target, type });
 }
 
+const EMPTY_STATEMENT_FIELD = "—";
+
 function subjectDisplayName(subject: PolicyStatementSubject): string {
   const kind = subject.kind.trim().toUpperCase();
   const name = subject.name.trim();
-  if (!name) return "—";
+  if (!name) return EMPTY_STATEMENT_FIELD;
   if (kind === "SERVICE") return `service ${name}`;
   if (kind === "DYNAMIC_GROUP") return `dynamic-group ${name}`;
   if (kind === "GROUP") return name;
   if (kind === "UNKNOWN" || !kind) return name;
   return `${subject.kind}: ${name}`;
+}
+
+export type PolicyStatementDisplayFields = {
+  type: string;
+  subject: string;
+  verb: string;
+  resource: string;
+  compartment: string;
+  condition: string;
+};
+
+function parseStatementTextFields(text: string): PolicyStatementDisplayFields | null {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  const match = normalized.match(
+    /^(allow|endorse|admit)\s+(.+?)\s+to\s+(\S+(?:-\S+)*)\s+(\S+)(?:\s+in\s+(.+?))?(?:\s+where\s+(.+))?$/i
+  );
+  if (!match) return null;
+
+  return {
+    type: match[1]?.trim() || EMPTY_STATEMENT_FIELD,
+    subject: match[2]?.trim() || EMPTY_STATEMENT_FIELD,
+    verb: match[3]?.trim() || EMPTY_STATEMENT_FIELD,
+    resource: match[4]?.trim() || EMPTY_STATEMENT_FIELD,
+    compartment: match[5]?.trim() || EMPTY_STATEMENT_FIELD,
+    condition: match[6]?.trim() || EMPTY_STATEMENT_FIELD,
+  };
+}
+
+export function getPolicyStatementDisplayFields(
+  statement: PolicyListStatement
+): PolicyStatementDisplayFields {
+  const type = statement.type?.trim() ?? "";
+  const verb = statement.verb?.trim() ?? "";
+  const resource = statement.resource?.trim() ?? "";
+  const compartment = statement.compartmentName?.trim() ?? "";
+  const condition = statement.condition?.trim() ?? "";
+  const subject = (statement.subjects ?? [])
+    .map(subjectDisplayName)
+    .filter((name) => name !== EMPTY_STATEMENT_FIELD)
+    .join(", ");
+
+  if (type || verb || resource || compartment || condition || subject) {
+    return {
+      type: type || EMPTY_STATEMENT_FIELD,
+      subject: subject || EMPTY_STATEMENT_FIELD,
+      verb: verb || EMPTY_STATEMENT_FIELD,
+      resource: resource || EMPTY_STATEMENT_FIELD,
+      compartment: compartment || EMPTY_STATEMENT_FIELD,
+      condition: condition || EMPTY_STATEMENT_FIELD,
+    };
+  }
+
+  return (
+    parseStatementTextFields(statement.text) ?? {
+      type: EMPTY_STATEMENT_FIELD,
+      subject: EMPTY_STATEMENT_FIELD,
+      verb: EMPTY_STATEMENT_FIELD,
+      resource: EMPTY_STATEMENT_FIELD,
+      compartment: EMPTY_STATEMENT_FIELD,
+      condition: EMPTY_STATEMENT_FIELD,
+    }
+  );
 }
 
 function enrichStatementFromStructured(
@@ -171,29 +235,23 @@ function enrichStatementFromText(
   links: OciGraphLink[],
   sId: string
 ) {
-  const normalized = statementText.trim().replace(/\s+/g, " ");
-  const match = normalized.match(
-    /^(allow|endorse|admit)\s+(.+?)\s+to\s+(\S+(?:-\S+)*)\s+(\S+)(?:\s+in\s+(.+?))?(?:\s+where\s+(.+))?$/i
-  );
-  if (!match) return;
-
-  const type = match[1]?.trim();
-  const subjectRaw = match[2]?.trim();
-  const verb = match[3]?.trim();
-  const resource = match[4]?.trim();
-  const compartmentName = match[5]?.trim();
-  const condition = match[6]?.trim();
+  const parsed = parseStatementTextFields(statementText);
+  if (!parsed) return;
 
   enrichStatementFromStructured(
     {
       id: statementKey,
       text: statementText,
-      type,
-      subjects: subjectRaw ? [{ kind: "UNKNOWN", name: subjectRaw }] : [],
-      verb,
-      resource,
-      compartmentName,
-      condition: condition ?? null,
+      type: parsed.type === EMPTY_STATEMENT_FIELD ? undefined : parsed.type,
+      subjects:
+        parsed.subject === EMPTY_STATEMENT_FIELD
+          ? []
+          : [{ kind: "UNKNOWN", name: parsed.subject }],
+      verb: parsed.verb === EMPTY_STATEMENT_FIELD ? undefined : parsed.verb,
+      resource: parsed.resource === EMPTY_STATEMENT_FIELD ? undefined : parsed.resource,
+      compartmentName:
+        parsed.compartment === EMPTY_STATEMENT_FIELD ? undefined : parsed.compartment,
+      condition: parsed.condition === EMPTY_STATEMENT_FIELD ? null : parsed.condition,
     },
     statementKey,
     nodeMap,

@@ -336,7 +336,7 @@ function optimizationSidebarAction(
 ): "remove-duplicate" | "modify" | null {
   const upper = type.toUpperCase();
   if (upper === "DUPLICATE") return "remove-duplicate";
-  if (upper.includes("REDUNDANT") || upper === "OVER_BROAD") return "modify";
+  if (upper.includes("REDUNDANT") || upper === "OVER_PRIVILEGED" || upper === "OVER_BROAD") return "modify";
   return null;
 }
 
@@ -678,8 +678,8 @@ export default function OciPolicyOptimizationPage() {
           accent="text-gray-900"
         />
         <SummaryStatBox
-          label="Over broad"
-          value={summary?.overBroad ?? "—"}
+          label="Over privileged"
+          value={summary?.overPrivileged ?? "—"}
           accent="text-orange-700"
         />
         <SummaryStatBox

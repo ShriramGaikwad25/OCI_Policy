@@ -125,19 +125,25 @@ export function ZoomPanViewport({
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    event.preventDefault();
+    window.getSelection()?.removeAllRanges();
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsPanning(true);
-    panStartRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      tx: transform.x,
-      ty: transform.y,
-    };
+    setTransform((current) => {
+      panStartRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        tx: current.x,
+        ty: current.y,
+      };
+      return current;
+    });
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const panStart = panStartRef.current;
-    if (!isPanning || !panStart) return;
+    if (!panStart) return;
+    event.preventDefault();
     const dx = event.clientX - panStart.x;
     const dy = event.clientY - panStart.y;
     setTransform((current) => ({
@@ -189,7 +195,7 @@ export function ZoomPanViewport({
 
       <div
         ref={viewportRef}
-        className={`relative min-h-0 flex-1 overflow-hidden bg-[#f8fafc] ${
+        className={`relative min-h-0 flex-1 touch-none overflow-hidden bg-[#f8fafc] select-none ${
           isPanning ? "cursor-grabbing" : "cursor-grab"
         }`}
         style={{
@@ -202,6 +208,7 @@ export function ZoomPanViewport({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onDragStart={(event) => event.preventDefault()}
       >
         {empty ? (
           <div className="absolute inset-0 flex items-center justify-center p-4 text-sm text-gray-500">
@@ -209,12 +216,12 @@ export function ZoomPanViewport({
           </div>
         ) : (
           <div
-            className="absolute left-0 top-0 origin-top-left"
+            className="absolute left-0 top-0 origin-top-left select-none"
             style={{
               transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
             }}
           >
-            <div ref={contentRef} className="inline-block">
+            <div ref={contentRef} className="inline-block select-none">
               {children}
             </div>
           </div>

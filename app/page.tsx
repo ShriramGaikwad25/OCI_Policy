@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  redirect("/oci-policy-analysis/policy-optimization");
+  redirect("/oci-policy-analysis");
 }

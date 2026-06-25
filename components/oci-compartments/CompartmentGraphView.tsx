@@ -7,7 +7,9 @@ import {
   truncateCompartmentLabel,
   type PositionedCompartmentNode,
 } from "@/lib/compartment-tree-layout";
+import { getCompartmentDisplayCount } from "@/lib/compartments-api";
 import type { CompartmentTreeNode } from "@/types/oci-compartments";
+import { CompartmentCountDisplay } from "@/components/oci-compartments/CompartmentCountBadge";
 import { ZoomPanViewport } from "@/components/oci-compartments/ZoomPanViewport";
 
 function ResourceTypeIcon({ resourceType }: { resourceType: string | null }) {
@@ -36,29 +38,23 @@ function CompartmentTreeNodeCard({
 
   return (
     <div
-      className="absolute"
+      className="absolute overflow-visible"
       style={{ left, top: y, width, height }}
       onMouseEnter={() => onHover(node.id)}
       onMouseLeave={() => onHover(null)}
     >
       <div
-        className={`relative flex h-full flex-col items-center justify-center rounded-lg border px-2 text-center shadow-sm transition-colors ${
+        className={`relative flex h-full flex-col items-center justify-center overflow-visible rounded-lg border px-2 py-1 text-center shadow-sm transition-colors ${
           isHovered
             ? "border-blue-400 bg-teal-700"
             : "border-teal-900/30 bg-teal-800"
         }`}
       >
         <span className="line-clamp-2 text-[11px] font-medium leading-tight text-white [overflow-wrap:anywhere]">
-          {truncateCompartmentLabel(node.name, 28)}
+          {truncateCompartmentLabel(node.name, 24)}
         </span>
+        <CompartmentCountDisplay node={node} variant="inline" />
         {icon ? <div className="mt-0.5">{icon}</div> : null}
-        {node.resourceCount != null && node.resourceCount > 0 ? (
-          <span className="absolute -bottom-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
-            {node.resourceCount > 999
-              ? `${Math.round(node.resourceCount / 1000)}k`
-              : node.resourceCount}
-          </span>
-        ) : null}
       </div>
     </div>
   );
@@ -78,6 +74,7 @@ export function CompartmentGraphView({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const layout = useMemo(() => (root ? layoutCompartmentTree(root) : null), [root]);
   const hoveredNode = layout?.nodes.find((n) => n.id === hoveredId)?.node ?? null;
+  const hoveredDisplayCount = hoveredNode ? getCompartmentDisplayCount(hoveredNode) : null;
 
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
@@ -141,10 +138,10 @@ export function CompartmentGraphView({
       {hoveredNode && (
         <div className="pointer-events-none absolute bottom-12 left-3 z-10 max-w-[min(420px,calc(100%-1.5rem))] rounded-md border border-gray-200 bg-white/95 px-3 py-2 text-sm text-gray-700 shadow-md backdrop-blur-sm">
           <span className="font-semibold text-gray-900">{hoveredNode.name}</span>
-          {hoveredNode.resourceCount != null ? (
+          {hoveredDisplayCount != null ? (
             <span className="text-gray-600">
               {" "}
-              · {hoveredNode.resourceCount.toLocaleString()} resources
+              · {hoveredDisplayCount.toLocaleString()} resources
             </span>
           ) : null}
           {hoveredNode.resourceType ? (

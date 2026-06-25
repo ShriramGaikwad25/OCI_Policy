@@ -26,7 +26,7 @@ export default function LoginPage() {
         if (accessToken && jwtToken) {
           // For now, assume token is valid if both tokens exist
           console.log('Both tokens found, redirecting to dashboard');
-          router.push('/oci-policy-analysis/policy-optimization');
+          router.push('/oci-policy-analysis');
           return;
         } else {
           console.log('Missing tokens, showing login form');
@@ -52,7 +52,7 @@ export default function LoginPage() {
       if (success) {
         console.log('Login successful, redirecting to dashboard');
         // Use window.location for a full page redirect to avoid router issues
-        window.location.href = '/oci-policy-analysis/policy-optimization';
+        window.location.href = '/oci-policy-analysis';
       } else {
         console.log('Login failed');
         setError('Invalid user ID or password');

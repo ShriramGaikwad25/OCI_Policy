@@ -1,4 +1,4 @@
-import { FileCode2, LayoutDashboard, Shield, Tags, Target } from "lucide-react";
+import { FileCode2, LayoutDashboard, Shield, Tags, Target, Users } from "lucide-react";
 
 export interface NavItem {
   name: string;
@@ -10,7 +10,7 @@ export interface NavItem {
 
 export const navLinks: NavItem[] = [
   {
-    name: "OCI Policy Dashboard",
+    name: "OCI Policy Governance",
     href: "/oci-policy-analysis",
     icon: Shield,
     subItems: [
@@ -23,6 +23,11 @@ export const navLinks: NavItem[] = [
         name: "Policy Optimization",
         href: "/oci-policy-analysis/policy-optimization",
         icon: Target,
+      },
+      {
+        name: "Group Access",
+        href: "/oci-policy-analysis/group-access",
+        icon: Users,
       },
       {
         name: "Tags",

@@ -37,7 +37,7 @@ function formatDateOnly(value: string | null | undefined): string {
 
 function riskClass(risk: string): string {
   if (risk === "High") return "text-red-700";
-  if (risk === "Medium") return "text-amber-700";
+  if (risk === "Medium") return "text-yellow-600";
   return "text-green-700";
 }
 
@@ -47,11 +47,6 @@ function statusClass(status: string): string {
   if (lower === "inactive") return "bg-gray-100 text-gray-700";
   if (lower === "deleted") return "bg-red-100 text-red-800";
   return "bg-blue-100 text-blue-800";
-}
-
-function truncateText(value: string, maxLen: number): string {
-  if (value.length <= maxLen) return value;
-  return `${value.slice(0, maxLen - 1)}…`;
 }
 
 function policyGraphHref(policyName: string): string {
@@ -195,10 +190,11 @@ export function OciPoliciesTable({
 
           <PolicyDateRangeFilter
             className="min-w-0"
+            dateField={filters.dateField}
             dateFrom={filters.dateFrom}
             dateTo={filters.dateTo}
-            onChange={(dateFrom, dateTo) =>
-              onFiltersChange({ ...filters, dateFrom, dateTo })
+            onChange={(dateField, dateFrom, dateTo) =>
+              onFiltersChange({ ...filters, dateField, dateFrom, dateTo })
             }
           />
 
@@ -220,14 +216,11 @@ export function OciPoliciesTable({
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] border-collapse text-sm">
+            <table className="w-full min-w-[1120px] border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-slate-200">
                   <th scope="col" className={TH}>
-                    Policy Name
-                  </th>
-                  <th scope="col" className={TH}>
-                    Description
+                    Policy
                   </th>
                   <th scope="col" className={TH}>
                     Compartment
@@ -240,9 +233,6 @@ export function OciPoliciesTable({
                   </th>
                   <th scope="col" className={TH}>
                     Created By
-                  </th>
-                  <th scope="col" className={TH}>
-                    Last Modified
                   </th>
                   <th scope="col" className={TH_CENTER}>
                     Risk
@@ -261,14 +251,20 @@ export function OciPoliciesTable({
               <tbody className="divide-y divide-gray-200">
                 {pageRows.map((row) => (
                   <tr key={row.name} className="hover:bg-blue-50/40">
-                    <td className={`${TD} font-medium text-gray-900`}>{row.name}</td>
-                    <td
-                      className={`${TD} max-w-[200px] text-gray-700`}
-                      title={row.description !== "—" ? row.description : undefined}
-                    >
-                      <span className="block truncate [overflow-wrap:anywhere]">
-                        {truncateText(row.description || "—", 56)}
-                      </span>
+                    <td className={`${TD} max-w-[280px]`}>
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className="font-medium text-gray-900 [overflow-wrap:anywhere]">
+                          {row.name}
+                        </span>
+                        {row.description && row.description !== "—" ? (
+                          <span
+                            className="line-clamp-2 text-xs leading-snug text-gray-500 [overflow-wrap:anywhere]"
+                            title={row.description}
+                          >
+                            {row.description}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className={`${TD} text-gray-600`}>{row.compartment || "—"}</td>
                     <td className={`${TD} whitespace-nowrap text-gray-700`}>
@@ -279,9 +275,6 @@ export function OciPoliciesTable({
                     </td>
                     <td className={`${TD} whitespace-nowrap text-gray-700`}>
                       {row.createdBy || "—"}
-                    </td>
-                    <td className={`${TD} whitespace-nowrap tabular-nums text-gray-600`}>
-                      {formatDateOnly(row.lastModified)}
                     </td>
                     <td className={`${TD_CENTER} font-semibold ${riskClass(row.risk)}`}>
                       {row.risk}

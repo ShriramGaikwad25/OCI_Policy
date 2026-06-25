@@ -84,6 +84,38 @@ function normalizePolicyStatus(raw: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function readOracleTags(record: Record<string, unknown>): Record<string, unknown> | null {
+  const definedTags = record.definedTags ?? record.defined_tags;
+  if (!definedTags || typeof definedTags !== "object" || Array.isArray(definedTags)) {
+    return null;
+  }
+
+  const tagNamespaces = definedTags as Record<string, unknown>;
+  const oracleTags = tagNamespaces["Oracle-Tags"] ?? tagNamespaces.OracleTags;
+  if (!oracleTags || typeof oracleTags !== "object" || Array.isArray(oracleTags)) {
+    return null;
+  }
+
+  return oracleTags as Record<string, unknown>;
+}
+
+function formatOracleCreatedBy(raw: string): string {
+  return raw.trim().replace(/^default\//i, "");
+}
+
+function readOracleTagCreatedBy(record: Record<string, unknown>): string | undefined {
+  const oracleTags = readOracleTags(record);
+  if (!oracleTags) return undefined;
+  const createdBy = readOptionalString(oracleTags, "CreatedBy", "createdBy", "created_by");
+  return createdBy ? formatOracleCreatedBy(createdBy) : undefined;
+}
+
+function readOracleTagCreatedOn(record: Record<string, unknown>): string | undefined {
+  const oracleTags = readOracleTags(record);
+  if (!oracleTags) return undefined;
+  return readOptionalString(oracleTags, "CreatedOn", "createdOn", "created_on");
+}
+
 function normalizeRisk(
   raw: string | undefined,
   highCount: number,
@@ -484,6 +516,13 @@ function parsePolicyAnalytics(record: Record<string, unknown> | null): PolicyLis
     conditionalPolicies: readOptionalNumber(analytics, "conditionalPolicies") ?? 0,
     conditionalStatements: readOptionalNumber(analytics, "conditionalStatements") ?? 0,
     unparsableStatements: readOptionalNumber(analytics, "unparsableStatements") ?? 0,
+    highRiskStatements:
+      readOptionalNumber(
+        analytics,
+        "highRiskStatements",
+        "high_risk_statements",
+        "highRiskStatementCount"
+      ) ?? 0,
   };
 }
 
@@ -527,14 +566,19 @@ function parsePolicyRecord(item: unknown, index: number): PolicyListItem | null 
     "state"
   );
 
+  const oracleCreatedBy = readOracleTagCreatedBy(record);
+  const oracleCreatedOn = readOracleTagCreatedOn(record);
+
   return {
     name,
     description: readString(record, "description", "policyDescription", "policy_description"),
     owner: readString(record, "owner", "createdBy", "created_by"),
     createdOn:
       readOptionalString(record, "createdOn", "created_on", "timeCreated", "time_created") ??
+      oracleCreatedOn ??
       null,
-    createdBy: readString(record, "createdBy", "created_by", "owner"),
+    createdBy:
+      oracleCreatedBy ?? readString(record, "createdBy", "created_by", "owner"),
     lastModified:
       readOptionalString(
         record,

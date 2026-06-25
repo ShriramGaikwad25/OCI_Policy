@@ -21,7 +21,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
       router.push('/login');
     } else if (isAuthenticated && pathname === '/login') {
       setIsRedirecting(true);
-      router.push('/oci-policy-analysis/policy-optimization');
+      router.push('/oci-policy-analysis');
     } else {
       setIsRedirecting(false);
     }
