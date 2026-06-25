@@ -469,7 +469,7 @@ function OptimizationDetailsSidebar({
         )}
 
         <SidebarSection title="Reason">
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-relaxed text-amber-950">
+          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm leading-relaxed text-blue-950">
             {row.reason || "—"}
           </p>
         </SidebarSection>

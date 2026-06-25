@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
 import { Navigation } from '@/components/Navigation';
+import AiChatWidget from '@/components/ai-chat/AiChatWidget';
 import { useLeftSidebar } from '@/contexts/LeftSidebarContext';
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
@@ -61,6 +62,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <AiChatWidget />
     </div>
   );
 }
