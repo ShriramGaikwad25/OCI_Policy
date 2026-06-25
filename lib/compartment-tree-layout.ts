@@ -1,7 +1,7 @@
 import type { CompartmentTreeNode } from "@/types/oci-compartments";
 
 export const COMPARTMENT_NODE_WIDTH = 132;
-export const COMPARTMENT_NODE_HEIGHT = 60;
+export const COMPARTMENT_NODE_HEIGHT = 68;
 export const COMPARTMENT_H_GAP = 32;
 export const COMPARTMENT_V_GAP = 72;
 export const COMPARTMENT_CANVAS_PADDING = 48;

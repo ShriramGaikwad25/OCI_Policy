@@ -21,20 +21,36 @@ function readOptionalString(record: Record<string, unknown>, ...keys: string[]):
   return undefined;
 }
 
-function readResourceCount(record: Record<string, unknown>): number | null {
-  const value =
-    record.resourceCount ??
-    record.resource_count ??
-    record.count ??
-    record.totalResources ??
-    record.total_resources ??
-    record.numResources ??
-    record.num_resources;
+function readCountField(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): number | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+  }
+  return null;
+}
 
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+function readResourceCount(record: Record<string, unknown>): number | null {
+  const direct = readCountField(
+    record,
+    "resourceCount",
+    "resource_count",
+    "totalResources",
+    "total_resources",
+    "numResources",
+    "num_resources"
+  );
+  if (direct != null) return direct;
+
+  const countField = readCountField(record, "count");
+  if (countField != null && readDirectPolicyCount(record) == null) {
+    return countField;
   }
 
   const resources = record.resources ?? record.resourceItems ?? record.items;
@@ -47,6 +63,14 @@ function readResourceCount(record: Record<string, unknown>): number | null {
   }
 
   return null;
+}
+
+function readDirectPolicyCount(record: Record<string, unknown>): number | null {
+  return readCountField(record, "directPolicyCount", "direct_policy_count");
+}
+
+function readCumulativePolicyCount(record: Record<string, unknown>): number | null {
+  return readCountField(record, "cumulativePolicyCount", "cumulative_policy_count");
 }
 
 function readResourceType(record: Record<string, unknown>): string | null {
@@ -106,6 +130,8 @@ function parseCompartmentNode(record: Record<string, unknown>, index: number): C
     : [];
 
   let resourceCount = readResourceCount(record);
+  const directPolicyCount = readDirectPolicyCount(record);
+  const cumulativePolicyCount = readCumulativePolicyCount(record);
   const resourceType = readResourceType(record);
   if (resourceCount == null && children.length === 0 && resourceType) {
     resourceCount = 1;
@@ -115,6 +141,8 @@ function parseCompartmentNode(record: Record<string, unknown>, index: number): C
     id: readNodeId(record, `compartment-${index}`),
     name: readNodeName(record, `Compartment ${index + 1}`),
     resourceCount,
+    directPolicyCount,
+    cumulativePolicyCount,
     resourceType,
     children,
   };
@@ -132,6 +160,8 @@ function buildTreeFromFlat(records: Record<string, unknown>[]): CompartmentTreeN
       id,
       name: readNodeName(record, `Compartment ${index + 1}`),
       resourceCount: readResourceCount(record),
+      directPolicyCount: readDirectPolicyCount(record),
+      cumulativePolicyCount: readCumulativePolicyCount(record),
       resourceType: readResourceType(record),
       children: [],
     });
@@ -166,6 +196,8 @@ function buildTreeFromFlat(records: Record<string, unknown>[]): CompartmentTreeN
     id: "synthetic-root",
     name: "Root",
     resourceCount: roots.reduce((sum, node) => sum + (node.resourceCount ?? 0), 0) || null,
+    directPolicyCount: null,
+    cumulativePolicyCount: null,
     resourceType: null,
     children: roots,
   };
@@ -176,6 +208,9 @@ function extractCompartmentRecords(payload: unknown): Record<string, unknown>[] 
   if (Array.isArray(payload)) return payload.filter(isRecord);
 
   if (!isRecord(payload)) return [];
+
+  const hierarchy = payload.hierarchy;
+  if (isRecord(hierarchy)) return [hierarchy];
 
   const nested =
     payload.compartments ??
@@ -233,12 +268,23 @@ function parseRootNode(records: Record<string, unknown>[]): CompartmentTreeNode 
 export function parseCompartmentsPayload(payload: unknown): CompartmentsTreeResult {
   const record = isRecord(payload) ? payload : {};
   const records = extractCompartmentRecords(payload);
+  const root = parseRootNode(records);
+
+  const hierarchy = isRecord(record.hierarchy) ? record.hierarchy : null;
+  const totalPolicies = readCountField(record, "totalPolicies", "total_policies");
 
   return {
-    tenancyId: readOptionalString(record, "tenancyId", "tenancy_id") ?? null,
+    tenancyId:
+      readOptionalString(record, "tenancyId", "tenancy_id") ??
+      (hierarchy ? readOptionalString(hierarchy, "ocid", "id") : undefined) ??
+      null,
     tenancyName:
-      readOptionalString(record, "tenancyName", "tenancy_name", "name", "displayName") ?? null,
-    root: parseRootNode(records),
+      readOptionalString(record, "tenancyName", "tenancy_name", "name", "displayName") ??
+      (hierarchy ? readOptionalString(hierarchy, "name") : undefined) ??
+      root?.name ??
+      null,
+    totalPolicies,
+    root,
   };
 }
 
@@ -296,7 +342,15 @@ export function collectCompartmentPaths(
 }
 
 export function sumPathResourceCounts(path: CompartmentTreeNode[]): number {
-  return path.reduce((sum, node) => sum + (node.resourceCount ?? 0), 0);
+  const leaf = path[path.length - 1];
+  if (leaf?.cumulativePolicyCount != null) {
+    return leaf.cumulativePolicyCount;
+  }
+
+  return path.reduce(
+    (sum, node) => sum + (node.directPolicyCount ?? node.resourceCount ?? 0),
+    0
+  );
 }
 
 export function formatCompartmentCount(count: number): string {
@@ -305,14 +359,18 @@ export function formatCompartmentCount(count: number): string {
   return String(count);
 }
 
-/** Resource count on the node, or aggregated from descendants when the node has none. */
+/** Direct policy count on the node, or legacy resource count. */
 export function getCompartmentDisplayCount(node: CompartmentTreeNode): number | null {
+  if (node.directPolicyCount != null) {
+    return node.directPolicyCount;
+  }
+
   if (node.resourceCount != null && node.resourceCount > 0) {
     return node.resourceCount;
   }
 
   if (node.children.length === 0) {
-    return null;
+    return node.directPolicyCount;
   }
 
   const childTotal = node.children.reduce(
@@ -320,6 +378,17 @@ export function getCompartmentDisplayCount(node: CompartmentTreeNode): number | 
     0
   );
   return childTotal > 0 ? childTotal : null;
+}
+
+export function getCompartmentCumulativeCount(node: CompartmentTreeNode): number | null {
+  if (node.cumulativePolicyCount != null) {
+    return node.cumulativePolicyCount;
+  }
+  return getCompartmentDisplayCount(node);
+}
+
+export function nodeHasPolicyCounts(node: CompartmentTreeNode): boolean {
+  return node.directPolicyCount != null || node.cumulativePolicyCount != null;
 }
 
 /** Shown when no resource count is available (e.g. parent with child compartments only). */

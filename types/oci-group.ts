@@ -12,6 +12,9 @@ export interface OciGroupAccessSummary {
   id: string;
   name: string;
   description?: string;
+  status?: string;
+  createdOn?: string | null;
+  createdBy?: string;
   memberCount: number;
   statementCount: number;
   resourceCount: number;
@@ -22,6 +25,7 @@ export interface OciGroupMember {
   name: string;
   email?: string;
   type?: string;
+  mfa?: string;
   status?: string;
 }
 

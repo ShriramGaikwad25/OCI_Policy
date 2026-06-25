@@ -16,6 +16,21 @@ export function groupAccessDetailHref(groupName: string): string {
   return `/oci-policy-analysis/group-access/${encodeURIComponent(groupName)}`;
 }
 
+function formatDateOnly(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString();
+}
+
+function statusClass(status: string): string {
+  const lower = status.toLowerCase();
+  if (lower === "active") return "bg-green-100 text-green-800";
+  if (lower === "inactive") return "bg-gray-100 text-gray-700";
+  if (lower === "deleted") return "bg-red-100 text-red-800";
+  return "bg-blue-100 text-blue-800";
+}
+
 export function OciGroupAccessTable({ groups }: { groups: OciGroupAccessSummary[] }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -32,21 +47,26 @@ export function OciGroupAccessTable({ groups }: { groups: OciGroupAccessSummary[
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed border-collapse text-sm">
+        <table className="w-full min-w-[960px] table-fixed border-collapse text-sm">
           <colgroup>
-            <col style={{ width: "24%" }} />
-            <col />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "12%" }} />
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
           </colgroup>
           <thead>
             <tr className="border-b-2 border-slate-200">
               <th scope="col" className={TH}>
-                Group
+                Name
               </th>
               <th scope="col" className={TH}>
-                Description
+                Created On
+              </th>
+              <th scope="col" className={TH}>
+                Created By
               </th>
               <th scope="col" className={TH_CENTER}>
                 Members
@@ -56,6 +76,9 @@ export function OciGroupAccessTable({ groups }: { groups: OciGroupAccessSummary[
               </th>
               <th scope="col" className={TH_CENTER}>
                 Resources
+              </th>
+              <th scope="col" className={TH}>
+                Status
               </th>
             </tr>
           </thead>
@@ -69,11 +92,28 @@ export function OciGroupAccessTable({ groups }: { groups: OciGroupAccessSummary[
                   >
                     {group.name}
                   </Link>
+                  {group.description ? (
+                    <p className={`mt-0.5 text-xs leading-snug text-gray-500 ${WRAP_CELL}`}>
+                      {group.description}
+                    </p>
+                  ) : null}
                 </td>
-                <td className={TD_MUTED}>{group.description || "—"}</td>
+                <td className={TD_MUTED}>{formatDateOnly(group.createdOn)}</td>
+                <td className={TD_MUTED}>{group.createdBy || "—"}</td>
                 <td className={TD_CENTER}>{group.memberCount.toLocaleString()}</td>
                 <td className={TD_CENTER}>{group.statementCount.toLocaleString()}</td>
                 <td className={TD_CENTER}>{group.resourceCount.toLocaleString()}</td>
+                <td className={TD}>
+                  {group.status ? (
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(group.status)}`}
+                    >
+                      {group.status}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

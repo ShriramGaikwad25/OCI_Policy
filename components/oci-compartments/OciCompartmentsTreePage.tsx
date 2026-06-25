@@ -32,9 +32,12 @@ export default function OciCompartmentsTreePage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-gray-900">Compartment tree</h1>
-              {data?.tenancyName ? (
-                <p className="text-sm text-gray-500">Tenancy: {data.tenancyName}</p>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-gray-500">
+                {data?.tenancyName ? <span>Tenancy: {data.tenancyName}</span> : null}
+                {data?.totalPolicies != null ? (
+                  <span>{data.totalPolicies.toLocaleString()} total policies</span>
+                ) : null}
+              </div>
             </div>
           </div>
           <button

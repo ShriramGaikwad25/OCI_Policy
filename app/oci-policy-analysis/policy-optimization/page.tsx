@@ -25,6 +25,14 @@ import {
 } from "@/lib/policy-optimization-api";
 import Modal from "@/components/Modal";
 import {
+  grantsForModify,
+  ModifyPolicyStatementsModal,
+} from "@/components/policy-optimization/ModifyPolicyStatementsModal";
+import {
+  grantsForRemoveDuplicate,
+  RemoveDuplicateStatementsModal,
+} from "@/components/policy-optimization/RemoveDuplicateStatementsModal";
+import {
   filterPolicyOptimizationRows,
   groupPolicyOptimizationRows,
 } from "@/lib/policy-optimization-search";
@@ -349,6 +357,8 @@ function OptimizationDetailsSidebar({
   widthPx: number;
   onClose: () => void;
 }) {
+  const [modifyOpen, setModifyOpen] = useState(false);
+  const [removeDuplicateOpen, setRemoveDuplicateOpen] = useState(false);
   const action = optimizationSidebarAction(row.optimizationType);
   const showRemoveDuplicate = action === "remove-duplicate";
   const showModify = action === "modify";
@@ -358,8 +368,11 @@ function OptimizationDetailsSidebar({
   const hasSharedStatement = uniqueStatements.length === 1;
   const isSinglePolicyFinding =
     redundantGrants.length === 1 && coveredBy.length === 0;
+  const modifyGrants = useMemo(() => grantsForModify(row), [row]);
+  const removeDuplicateGrants = useMemo(() => grantsForRemoveDuplicate(row), [row]);
 
   return (
+    <>
     <aside
       className="fixed right-0 top-[60px] z-50 flex flex-col border-l border-gray-200 bg-slate-50 shadow-2xl"
       style={{ width: widthPx, height: "calc(100vh - 60px)" }}
@@ -473,6 +486,7 @@ function OptimizationDetailsSidebar({
           {showRemoveDuplicate && (
             <button
               type="button"
+              onClick={() => setRemoveDuplicateOpen(true)}
               className="w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
             >
               Remove duplicate
@@ -481,6 +495,7 @@ function OptimizationDetailsSidebar({
           {showModify && (
             <button
               type="button"
+              onClick={() => setModifyOpen(true)}
               className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
             >
               Modify
@@ -489,6 +504,18 @@ function OptimizationDetailsSidebar({
         </div>
       )}
     </aside>
+
+    <ModifyPolicyStatementsModal
+      open={modifyOpen}
+      onClose={() => setModifyOpen(false)}
+      initialGrants={modifyGrants}
+    />
+    <RemoveDuplicateStatementsModal
+      open={removeDuplicateOpen}
+      onClose={() => setRemoveDuplicateOpen(false)}
+      initialGrants={removeDuplicateGrants}
+    />
+    </>
   );
 }
 

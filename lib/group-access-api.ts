@@ -90,6 +90,70 @@ function readNestedArray(record: Record<string, unknown>, ...keys: string[]): un
   return [];
 }
 
+function readOracleTags(record: Record<string, unknown>): Record<string, unknown> | null {
+  const definedTags = record.definedTags ?? record.defined_tags;
+  if (!definedTags || typeof definedTags !== "object" || Array.isArray(definedTags)) {
+    return null;
+  }
+
+  const tagNamespaces = definedTags as Record<string, unknown>;
+  const oracleTags = tagNamespaces["Oracle-Tags"] ?? tagNamespaces.OracleTags;
+  if (!oracleTags || typeof oracleTags !== "object" || Array.isArray(oracleTags)) {
+    return null;
+  }
+
+  return oracleTags as Record<string, unknown>;
+}
+
+function formatOracleCreatedBy(raw: string): string {
+  return raw.trim().replace(/^default\//i, "");
+}
+
+function readOracleTagCreatedBy(record: Record<string, unknown>): string | undefined {
+  const oracleTags = readOracleTags(record);
+  if (!oracleTags) return undefined;
+  const createdBy = readOptionalString(oracleTags, "CreatedBy", "createdBy", "created_by");
+  return createdBy ? formatOracleCreatedBy(createdBy) : undefined;
+}
+
+function readOracleTagCreatedOn(record: Record<string, unknown>): string | undefined {
+  const oracleTags = readOracleTags(record);
+  if (!oracleTags) return undefined;
+  return readOptionalString(oracleTags, "CreatedOn", "createdOn", "created_on");
+}
+
+function readGroupCreatedBy(...sources: Record<string, unknown>[]): string | undefined {
+  for (const source of sources) {
+    const fromTags = readOracleTagCreatedBy(source);
+    if (fromTags) return fromTags;
+    const direct = readOptionalString(
+      source,
+      "createdBy",
+      "created_by",
+      "createdByName",
+      "owner"
+    );
+    if (direct) return direct;
+  }
+  return undefined;
+}
+
+function readGroupCreatedOn(...sources: Record<string, unknown>[]): string | null {
+  for (const source of sources) {
+    const fromTags = readOracleTagCreatedOn(source);
+    if (fromTags) return fromTags;
+    const direct = readOptionalString(
+      source,
+      "createdOn",
+      "created_on",
+      "timeCreated",
+      "time_created"
+    );
+    if (direct) return direct;
+  }
+  return null;
+}
+
 function countFromRecord(record: Record<string, unknown>, arrayKeys: string[], countKeys: string[]): number {
   const explicit = readOptionalNumber(record, ...countKeys);
   if (explicit != null) return explicit;
@@ -98,6 +162,29 @@ function countFromRecord(record: Record<string, unknown>, arrayKeys: string[], c
     if (Array.isArray(value)) return value.length;
   }
   return 0;
+}
+
+function readMemberMfa(item: Record<string, unknown>): string | undefined {
+  const raw =
+    item.mfaActivated ??
+    item.mfa_activated ??
+    item.mfa ??
+    item.MFA ??
+    item.mfaStatus ??
+    item.mfa_status ??
+    item.mfaEnabled ??
+    item.mfa_enabled ??
+    item.isMfaEnabled;
+
+  if (typeof raw === "boolean") return raw ? "True" : "False";
+  if (typeof raw === "number") return raw ? "True" : "False";
+  if (typeof raw === "string" && raw.trim()) {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "true") return "True";
+    if (normalized === "false") return "False";
+    return raw.trim();
+  }
+  return undefined;
 }
 
 function parseMemberItem(item: unknown, index: number): OciGroupMember | null {
@@ -126,14 +213,14 @@ function parseMemberItem(item: unknown, index: number): OciGroupMember | null {
     ) ?? `member-${index}-${name}`;
 
   const email = readOptionalString(item, "email", "emailAddress", "mail");
-  const type = readOptionalString(item, "type", "memberType", "userType", "kind");
+  const mfa = readMemberMfa(item);
   const status = readOptionalString(item, "status", "lifecycleState", "state");
 
   return {
     id,
     name,
     ...(email ? { email } : {}),
-    ...(type ? { type } : {}),
+    ...(mfa ? { mfa } : {}),
     ...(status ? { status } : {}),
   };
 }
@@ -326,6 +413,10 @@ function parseGroupAccessRecord(item: unknown, index: number): OciGroupAccessDet
     ) ?? name;
 
   const description = readOptionalString(metadataSource, "description", "groupDescription");
+  const status = readOptionalString(metadataSource, "status", "lifecycleState", "state");
+  const tagSources: Record<string, unknown>[] = nestedGroup ? [nestedGroup, item] : [item];
+  const createdOn = readGroupCreatedOn(...tagSources);
+  const createdBy = readGroupCreatedBy(...tagSources);
   const members = parseMembers(item);
   const statements = parseStatements(item);
   const resources = parseResources(item);
@@ -377,6 +468,9 @@ function parseGroupAccessRecord(item: unknown, index: number): OciGroupAccessDet
     id,
     name,
     ...(description ? { description } : {}),
+    ...(status ? { status } : {}),
+    ...(createdOn ? { createdOn } : {}),
+    ...(createdBy ? { createdBy } : {}),
     memberCount: members.length > 0 ? members.length : memberCount,
     statementCount: statements.length > 0 ? statements.length : statementCount,
     resourceCount: resources.length > 0 ? resources.length : resourceCount,
@@ -436,6 +530,9 @@ export function parseGroupAccessListResponse(payload: unknown): OciGroupAccessLi
       id: group.id,
       name: group.name,
       description: group.description,
+      status: group.status,
+      createdOn: group.createdOn,
+      createdBy: group.createdBy,
       memberCount: group.memberCount,
       statementCount: group.statementCount,
       resourceCount: group.resourceCount,

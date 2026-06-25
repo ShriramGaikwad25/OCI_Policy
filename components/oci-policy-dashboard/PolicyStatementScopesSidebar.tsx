@@ -51,14 +51,14 @@ const SECTION_THEMES = {
     compartmentTitle: "text-slate-900",
   },
   constraints: {
-    border: "border-amber-200",
-    headerBg: "bg-amber-50",
-    headerBorder: "border-amber-100",
-    title: "text-amber-900",
-    accent: "bg-amber-500",
-    label: "text-amber-800",
-    detailBorder: "border-amber-100",
-    item: "border-amber-100 bg-amber-50/80 text-amber-950",
+    border: "border-blue-200",
+    headerBg: "bg-blue-50",
+    headerBorder: "border-blue-100",
+    title: "text-blue-900",
+    accent: "bg-blue-500",
+    label: "text-blue-800",
+    detailBorder: "border-blue-100",
+    item: "border-blue-100 bg-blue-50/80 text-blue-950",
   },
   notes: {
     border: "border-sky-200",
@@ -166,7 +166,7 @@ function TagsBlock({
   children: ReactNode;
   tone?: "defined" | "freeform";
 }) {
-  const titleClass = tone === "defined" ? "text-blue-700" : "text-amber-800";
+  const titleClass = "text-blue-700";
 
   return (
     <div className="space-y-1.5">
@@ -213,14 +213,14 @@ function FreeformTagsTable({ tags }: { tags: PolicyScopeFreeformTag[] }) {
   if (tags.length === 0) return <EmptyValue />;
 
   return (
-    <div className="overflow-x-auto rounded-md border border-amber-100">
+    <div className="overflow-x-auto rounded-md border border-blue-100">
       <table className="min-w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-amber-50/90">
-            <th className="border-b border-amber-100 px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+          <tr className="bg-blue-50/90">
+            <th className="border-b border-blue-100 px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-blue-900">
               Key
             </th>
-            <th className="border-b border-amber-100 px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+            <th className="border-b border-blue-100 px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-blue-900">
               Value
             </th>
           </tr>
@@ -247,7 +247,7 @@ function lifecycleStateTone(state: string): string {
     return "bg-rose-100 text-rose-800 ring-rose-200";
   }
   if (["PROVISIONING", "CREATING", "UPDATING"].includes(normalized)) {
-    return "bg-amber-100 text-amber-800 ring-amber-200";
+    return "bg-blue-100 text-blue-800 ring-blue-200";
   }
   return "bg-slate-100 text-slate-700 ring-slate-200";
 }
@@ -255,7 +255,7 @@ function lifecycleStateTone(state: string): string {
 const RESOURCE_CARD_ACCENTS = [
   "border-l-violet-500",
   "border-l-sky-500",
-  "border-l-amber-500",
+  "border-l-cyan-500",
   "border-l-rose-500",
   "border-l-indigo-500",
   "border-l-teal-500",
@@ -612,7 +612,7 @@ export default function PolicyStatementScopesSidebar({
         </div>
       ) : isError ? (
         <div className="space-y-3">
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
+          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-sm text-blue-900">
             {error instanceof Error ? error.message : "Failed to load policy scopes"}.
           </p>
           <PolicyScopeDetails scopeView={scopeView} />

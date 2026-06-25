@@ -6,9 +6,9 @@ import { Calendar, DateObject } from "react-multi-date-picker";
 import { Calendar as CalendarIcon, X } from "lucide-react";
 import type { PolicyListDateField } from "@/types/oci-policy";
 
-const DATE_FIELD_LABELS: Record<Exclude<PolicyListDateField, "">, string> = {
-  createdOn: "Created on",
-};
+const DATE_FIELD = "createdOn" as const;
+const DATE_FIELD_LABEL = "Created on";
+const FILTER_LABEL = "Date filter";
 
 function toIsoDate(value: DateObject | Date | null | undefined): string {
   if (!value) return "";
@@ -92,24 +92,22 @@ function commitRange(
   return { dateFrom, dateTo };
 }
 
-function fieldLabel(field: PolicyListDateField): string {
-  return field ? DATE_FIELD_LABELS[field] : "";
+function fieldLabel(): string {
+  return DATE_FIELD_LABEL;
 }
 
 export function PolicyDateRangeFilter({
   className,
-  dateField,
   dateFrom,
   dateTo,
   onChange,
 }: {
   className?: string;
-  dateField: PolicyListDateField;
   dateFrom: string;
   dateTo: string;
   onChange: (dateField: PolicyListDateField, dateFrom: string, dateTo: string) => void;
 }) {
-  const committedRef = useRef({ dateField, dateFrom, dateTo });
+  const committedRef = useRef({ dateFrom, dateTo });
   const pickerRangeRef = useRef<DateObject[] | undefined>(undefined);
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -126,15 +124,14 @@ export function PolicyDateRangeFilter({
 
   useEffect(() => {
     if (
-      dateField === committedRef.current.dateField &&
       dateFrom === committedRef.current.dateFrom &&
       dateTo === committedRef.current.dateTo
     ) {
       return;
     }
-    committedRef.current = { dateField, dateFrom, dateTo };
+    committedRef.current = { dateFrom, dateTo };
     setPickerRange(toPickerValue(dateFrom, dateTo));
-  }, [dateField, dateFrom, dateTo]);
+  }, [dateFrom, dateTo]);
 
   const computePanelPosition = useCallback((): { top: number; left: number } | null => {
     const anchor = anchorRef.current;
@@ -204,13 +201,12 @@ export function PolicyDateRangeFilter({
   }, [open, placePanel]);
 
   const openPanel = useCallback(() => {
-    if (!dateField) return;
     const months = initialVisibleMonths(pickerRangeRef.current);
     setLeftMonth(months.left);
     setRightMonth(months.right);
     setPanelPos(null);
     setOpen(true);
-  }, [dateField]);
+  }, []);
 
   const closePanel = useCallback(() => {
     const current = pickerRangeRef.current;
@@ -220,8 +216,8 @@ export function PolicyDateRangeFilter({
       );
       if (!hadCommittedRange) {
         const day = toIsoDate(current[0]);
-        committedRef.current = { dateField, dateFrom: day, dateTo: day };
-        onChange(dateField, day, day);
+        committedRef.current = { dateFrom: day, dateTo: day };
+        onChange(DATE_FIELD, day, day);
         setPickerRange([current[0], new DateObject(current[0])]);
       } else {
         setPickerRange(
@@ -229,13 +225,13 @@ export function PolicyDateRangeFilter({
         );
       }
     } else if (current && current.length >= 2) {
-      const committed = commitRange(current, (from, to) => onChange(dateField, from, to));
-      committedRef.current = { dateField, ...committed };
+      const committed = commitRange(current, (from, to) => onChange(DATE_FIELD, from, to));
+      committedRef.current = { ...committed };
       setPickerRange(toPickerValue(committed.dateFrom, committed.dateTo));
     }
     setOpen(false);
     setPanelPos(null);
-  }, [dateField, onChange]);
+  }, [onChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -262,29 +258,19 @@ export function PolicyDateRangeFilter({
   }, [open, closePanel, placePanel]);
 
   const handleRangeChange = (dates: DateObject[] | null) => {
-    if (!dateField) return;
-
     if (!dates || dates.length === 0) {
       setPickerRange(undefined);
-      committedRef.current = { dateField, dateFrom: "", dateTo: "" };
-      onChange(dateField, "", "");
+      committedRef.current = { dateFrom: "", dateTo: "" };
+      onChange("", "", "");
       return;
     }
 
     setPickerRange(dates);
 
     if (dates.length >= 2) {
-      const committed = commitRange(dates, (from, to) => onChange(dateField, from, to));
-      committedRef.current = { dateField, ...committed };
+      const committed = commitRange(dates, (from, to) => onChange(DATE_FIELD, from, to));
+      committedRef.current = { ...committed };
     }
-  };
-
-  const handleFieldChange = (nextField: PolicyListDateField) => {
-    setOpen(false);
-    setPanelPos(null);
-    setPickerRange(undefined);
-    committedRef.current = { dateField: nextField, dateFrom: "", dateTo: "" };
-    onChange(nextField, "", "");
   };
 
   const displayLabel = useMemo(() => {
@@ -297,9 +283,6 @@ export function PolicyDateRangeFilter({
     return formatRangeLabel(dateFrom, dateTo, true);
   }, [pickerRange, dateFrom, dateTo]);
 
-  const filterHint = dateField
-    ? `Filtering by ${fieldLabel(dateField)}`
-    : "Choose a field, then select a date range";
   const displayTitle = useMemo(() => {
     const range =
       pickerRange?.length
@@ -311,11 +294,11 @@ export function PolicyDateRangeFilter({
             false
           )
         : formatRangeLabel(dateFrom, dateTo, false);
-    if (range && dateField) return `${fieldLabel(dateField)}: ${range}`;
-    return filterHint;
-  }, [pickerRange, dateFrom, dateTo, dateField, filterHint]);
+    if (range) return `${fieldLabel()}: ${range}`;
+    return `Select date range for ${fieldLabel()}`;
+  }, [pickerRange, dateFrom, dateTo]);
 
-  const hasValue = Boolean(dateField && (dateFrom || dateTo || pickerRange?.length));
+  const hasValue = Boolean(dateFrom || dateTo || pickerRange?.length);
 
   const calendarPanel =
     open &&
@@ -332,10 +315,10 @@ export function PolicyDateRangeFilter({
           zIndex: 2000,
         }}
         role="dialog"
-        aria-label={`Choose date range for ${fieldLabel(dateField)}`}
+        aria-label={`Choose date range for ${fieldLabel()}`}
       >
         <div className="border-b border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">
-          {fieldLabel(dateField)}
+          {fieldLabel()}
         </div>
         <div className="flex max-w-full flex-col sm:flex-row">
           <Calendar
@@ -365,30 +348,16 @@ export function PolicyDateRangeFilter({
 
   return (
     <div className={`flex min-w-0 max-w-full flex-col gap-1 overflow-hidden text-sm text-gray-700 ${className ?? ""}`}>
-      <span className="truncate text-xs font-medium uppercase text-gray-500">Date filter</span>
+      <span className="truncate text-xs font-medium uppercase text-gray-500">{FILTER_LABEL}</span>
       <div
         ref={anchorRef}
         className="flex h-[38px] w-full min-w-0 overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20"
       >
-        <select
-          value={dateField}
-          onChange={(e) => handleFieldChange(e.target.value as PolicyListDateField)}
-          className="h-full min-w-0 max-w-[46%] shrink-0 cursor-pointer border-0 border-r border-gray-300 bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-0"
-          aria-label="Choose date field to filter"
-        >
-          <option value="">Field</option>
-          <option value="createdOn">{DATE_FIELD_LABELS.createdOn}</option>
-        </select>
         <button
           type="button"
           onClick={() => (open ? closePanel() : openPanel())}
-          disabled={!dateField}
-          className="relative flex min-w-0 flex-1 items-center overflow-hidden bg-white py-2 pl-8 pr-7 text-left text-sm disabled:cursor-not-allowed disabled:bg-white disabled:text-gray-400"
-          aria-label={
-            dateField
-              ? `Select date range for ${fieldLabel(dateField)}`
-              : "Select a field before choosing dates"
-          }
+          className="relative flex min-w-0 flex-1 items-center overflow-hidden bg-white py-2 pl-8 pr-7 text-left text-sm"
+          aria-label={`Select date range for ${fieldLabel()}`}
           aria-expanded={open}
           title={displayTitle}
         >
@@ -399,7 +368,7 @@ export function PolicyDateRangeFilter({
           <span
             className={`block min-w-0 truncate ${displayLabel ? "text-gray-900" : "text-gray-400"}`}
           >
-            {displayLabel || (dateField ? "Select range" : "Choose field first")}
+            {displayLabel || "Select range"}
           </span>
         </button>
         {hasValue ? (
@@ -408,7 +377,7 @@ export function PolicyDateRangeFilter({
             onClick={(e) => {
               e.stopPropagation();
               setPickerRange(undefined);
-              committedRef.current = { dateField: "", dateFrom: "", dateTo: "" };
+              committedRef.current = { dateFrom: "", dateTo: "" };
               onChange("", "", "");
               setOpen(false);
               setPanelPos(null);

@@ -190,7 +190,6 @@ export function OciPoliciesTable({
 
           <PolicyDateRangeFilter
             className="min-w-0"
-            dateField={filters.dateField}
             dateFrom={filters.dateFrom}
             dateTo={filters.dateTo}
             onChange={(dateField, dateFrom, dateTo) =>

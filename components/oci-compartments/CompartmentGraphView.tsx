@@ -7,7 +7,11 @@ import {
   truncateCompartmentLabel,
   type PositionedCompartmentNode,
 } from "@/lib/compartment-tree-layout";
-import { getCompartmentDisplayCount } from "@/lib/compartments-api";
+import {
+  getCompartmentCumulativeCount,
+  getCompartmentDisplayCount,
+  nodeHasPolicyCounts,
+} from "@/lib/compartments-api";
 import type { CompartmentTreeNode } from "@/types/oci-compartments";
 import { CompartmentCountDisplay } from "@/components/oci-compartments/CompartmentCountBadge";
 import { ZoomPanViewport } from "@/components/oci-compartments/ZoomPanViewport";
@@ -15,10 +19,10 @@ import { ZoomPanViewport } from "@/components/oci-compartments/ZoomPanViewport";
 function ResourceTypeIcon({ resourceType }: { resourceType: string | null }) {
   const normalized = resourceType?.trim().toLowerCase() ?? "";
   if (normalized.includes("database") || normalized.includes("db")) {
-    return <Database className="h-4 w-4 text-teal-100" aria-hidden />;
+    return <Database className="h-4 w-4 text-blue-100" aria-hidden />;
   }
   if (normalized.includes("instance") || normalized.includes("pool")) {
-    return <Boxes className="h-4 w-4 text-teal-100" aria-hidden />;
+    return <Boxes className="h-4 w-4 text-blue-100" aria-hidden />;
   }
   return null;
 }
@@ -44,17 +48,17 @@ function CompartmentTreeNodeCard({
       onMouseLeave={() => onHover(null)}
     >
       <div
-        className={`relative flex h-full flex-col items-center justify-center overflow-visible rounded-lg border px-2 py-1 text-center shadow-sm transition-colors ${
+        className={`relative flex h-full flex-col items-center justify-center overflow-visible rounded-lg border px-2 py-1.5 text-center shadow-sm transition-colors ${
           isHovered
-            ? "border-blue-400 bg-teal-700"
-            : "border-teal-900/30 bg-teal-800"
+            ? "border-blue-400 bg-blue-800"
+            : "border-blue-950/40 bg-[#004a77]"
         }`}
       >
         <span className="line-clamp-2 text-[11px] font-medium leading-tight text-white [overflow-wrap:anywhere]">
           {truncateCompartmentLabel(node.name, 24)}
         </span>
-        <CompartmentCountDisplay node={node} variant="inline" />
         {icon ? <div className="mt-0.5">{icon}</div> : null}
+        <CompartmentCountDisplay node={node} variant="badge" />
       </div>
     </div>
   );
@@ -74,7 +78,9 @@ export function CompartmentGraphView({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const layout = useMemo(() => (root ? layoutCompartmentTree(root) : null), [root]);
   const hoveredNode = layout?.nodes.find((n) => n.id === hoveredId)?.node ?? null;
-  const hoveredDisplayCount = hoveredNode ? getCompartmentDisplayCount(hoveredNode) : null;
+  const hoveredDirect = hoveredNode ? getCompartmentDisplayCount(hoveredNode) : null;
+  const hoveredCumulative = hoveredNode ? getCompartmentCumulativeCount(hoveredNode) : null;
+  const policyMode = hoveredNode ? nodeHasPolicyCounts(hoveredNode) : false;
 
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
@@ -116,10 +122,23 @@ export function CompartmentGraphView({
                   key={`edge-${index}`}
                   d={edge.path}
                   fill="none"
-                  stroke="#94a3b8"
+                  stroke="#3b82f6"
                   strokeWidth={1.5}
+                  markerEnd="url(#compartment-arrow)"
                 />
               ))}
+              <defs>
+                <marker
+                  id="compartment-arrow"
+                  markerWidth="6"
+                  markerHeight="6"
+                  refX="5"
+                  refY="3"
+                  orient="auto"
+                >
+                  <path d="M0,0 L6,3 L0,6 Z" fill="#3b82f6" />
+                </marker>
+              </defs>
             </svg>
             {layout.nodes.map((positioned) => (
               <CompartmentTreeNodeCard
@@ -138,10 +157,25 @@ export function CompartmentGraphView({
       {hoveredNode && (
         <div className="pointer-events-none absolute bottom-12 left-3 z-10 max-w-[min(420px,calc(100%-1.5rem))] rounded-md border border-gray-200 bg-white/95 px-3 py-2 text-sm text-gray-700 shadow-md backdrop-blur-sm">
           <span className="font-semibold text-gray-900">{hoveredNode.name}</span>
-          {hoveredDisplayCount != null ? (
+          {policyMode ? (
+            <>
+              {hoveredDirect != null ? (
+                <span className="text-gray-600">
+                  {" "}
+                  · {hoveredDirect.toLocaleString()} direct
+                </span>
+              ) : null}
+              {hoveredCumulative != null && hoveredCumulative !== hoveredDirect ? (
+                <span className="text-gray-600">
+                  {" "}
+                  · {hoveredCumulative.toLocaleString()} cumulative
+                </span>
+              ) : null}
+            </>
+          ) : hoveredDirect != null ? (
             <span className="text-gray-600">
               {" "}
-              · {hoveredDisplayCount.toLocaleString()} resources
+              · {hoveredDirect.toLocaleString()} resources
             </span>
           ) : null}
           {hoveredNode.resourceType ? (

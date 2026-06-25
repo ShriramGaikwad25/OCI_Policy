@@ -79,9 +79,8 @@ export function applyPolicyListFilters(
     if (filters.status && policy.status !== filters.status) return false;
 
     if (
-      filters.dateField &&
       (fromTime != null || toTime != null) &&
-      !policyMatchesDateRange(policy, filters.dateField, fromTime, toTime)
+      !policyMatchesDateRange(policy, "createdOn", fromTime, toTime)
     ) {
       return false;
     }
@@ -95,6 +94,7 @@ export function hasActivePolicyListFilters(filters: PolicyListFilters): boolean 
     filters.risk ||
       filters.compartment ||
       filters.status ||
-      (filters.dateField && (filters.dateFrom || filters.dateTo))
+      filters.dateFrom ||
+      filters.dateTo
   );
 }

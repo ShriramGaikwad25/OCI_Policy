@@ -353,7 +353,7 @@ export function Navigation() {
                             {subItem.name}
                             {subItem.beta && (
                               <span
-                                className="text-[11px] font-semibold text-amber-600 leading-none ml-0.5"
+                                className="text-[11px] font-semibold text-blue-600 leading-none ml-0.5"
                                 aria-hidden
                               >
                                 β

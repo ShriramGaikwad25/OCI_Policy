@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   OciGroupMember,
   OciGroupResource,
@@ -11,6 +11,47 @@ import { TablePagination } from "@/components/oci-group-access/TablePagination";
 const WRAP_CELL = "whitespace-normal break-words [overflow-wrap:anywhere]";
 const TH = `px-3 py-3 text-left text-[11px] font-semibold text-blue-800 uppercase tracking-wide align-middle bg-blue-50/80 border-b border-blue-100 ${WRAP_CELL}`;
 const TD = `px-3 py-2.5 align-top text-sm leading-snug text-gray-800 bg-white ${WRAP_CELL}`;
+
+type TableRow = Record<string, string | undefined>;
+type TableColumn = {
+  key: string;
+  label: string;
+  render?: (row: TableRow) => string | undefined;
+  cell?: (row: TableRow) => ReactNode;
+};
+
+function statusClass(status: string): string {
+  const lower = status.toLowerCase();
+  if (
+    lower === "active" ||
+    lower === "running" ||
+    lower === "available" ||
+    lower === "enabled"
+  ) {
+    return "bg-green-100 text-green-800";
+  }
+  if (lower === "inactive" || lower === "stopped" || lower === "disabled") {
+    return "bg-gray-100 text-gray-700";
+  }
+  if (lower === "deleted" || lower === "terminated") {
+    return "bg-red-100 text-red-800";
+  }
+  if (lower === "provisioning" || lower === "creating" || lower === "updating") {
+    return "bg-blue-100 text-blue-800";
+  }
+  return "bg-blue-100 text-blue-800";
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  if (!status) return <span className="text-gray-400">—</span>;
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(status)}`}
+    >
+      {status}
+    </span>
+  );
+}
 
 function CellValue({ value }: { value: string | undefined }) {
   if (!value) return <span className="text-gray-400">—</span>;
@@ -33,8 +74,8 @@ function DataTable({
   emptyMessage,
   colWidths,
 }: {
-  columns: { key: string; label: string; render: (row: Record<string, string | undefined>) => string | undefined }[];
-  rows: Record<string, string | undefined>[];
+  columns: TableColumn[];
+  rows: TableRow[];
   emptyMessage: string;
   colWidths?: string[];
 }) {
@@ -78,7 +119,11 @@ function DataTable({
                 <tr key={`${row.id ?? start + index}`} className="hover:bg-slate-50">
                   {columns.map((column) => (
                     <td key={column.key} className={TD}>
-                      <CellValue value={column.render(row)} />
+                      {column.cell ? (
+                        column.cell(row)
+                      ) : (
+                        <CellValue value={column.render?.(row)} />
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -106,7 +151,7 @@ function memberRows(members: OciGroupMember[]): Record<string, string | undefine
     id: member.id,
     name: member.name,
     email: member.email,
-    type: member.type,
+    mfa: member.mfa,
     status: member.status,
   }));
 }
@@ -129,7 +174,7 @@ function resourceRows(resources: OciGroupResource[]): Record<string, string | un
     name: resource.name,
     resourceType: resource.resourceType,
     compartment: resource.compartment,
-    lifecycleState: resource.lifecycleState,
+    status: resource.lifecycleState,
   }));
 }
 
@@ -139,8 +184,12 @@ export function OciGroupMembersTable({ members }: { members: OciGroupMember[] })
       columns={[
         { key: "name", label: "Name", render: (row) => row.name },
         { key: "email", label: "Email", render: (row) => row.email },
-        { key: "type", label: "Type", render: (row) => row.type },
-        { key: "status", label: "Status", render: (row) => row.status },
+        { key: "mfa", label: "MFA", render: (row) => row.mfa },
+        {
+          key: "status",
+          label: "Status",
+          cell: (row) => <StatusBadge status={row.status} />,
+        },
       ]}
       rows={memberRows(members)}
       emptyMessage="No members found for this group."
@@ -174,7 +223,11 @@ export function OciGroupResourcesTable({ resources }: { resources: OciGroupResou
         { key: "name", label: "Name", render: (row) => row.name },
         { key: "resourceType", label: "Type", render: (row) => row.resourceType },
         { key: "compartment", label: "Compartment", render: (row) => row.compartment },
-        { key: "lifecycleState", label: "State", render: (row) => row.lifecycleState },
+        {
+          key: "status",
+          label: "Status",
+          cell: (row) => <StatusBadge status={row.status} />,
+        },
       ]}
       rows={resourceRows(resources)}
       emptyMessage="No resources found for this group."

@@ -118,17 +118,17 @@ export function PolicyAnalyticsCards({ analytics }: { analytics: PolicyListAnaly
         className="xl:col-start-3 xl:row-start-2"
       />
 
-      <div className="col-span-2 sm:col-span-3 xl:col-start-4 xl:row-start-1 xl:row-span-2 xl:col-span-1">
-        <DistinctSubjectsCard analytics={analytics} />
-      </div>
-
-      <GraphShortcutCard className="xl:col-start-5 xl:row-start-1" />
+      <GraphShortcutCard className="xl:col-start-4 xl:row-start-1" />
       <SummaryStatBox
         label="Unparsable statements"
         value={analytics.unparsableStatements}
         accent={analytics.unparsableStatements > 0 ? "text-red-700" : "text-gray-900"}
-        className="xl:col-start-5 xl:row-start-2"
+        className="xl:col-start-4 xl:row-start-2"
       />
+
+      <div className="col-span-2 sm:col-span-3 xl:col-start-5 xl:row-start-1 xl:row-span-2 xl:col-span-1">
+        <DistinctSubjectsCard analytics={analytics} />
+      </div>
     </div>
   );
 }
