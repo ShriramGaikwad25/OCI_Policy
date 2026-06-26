@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Pencil, Trash2, X } from "lucide-react";
 import Modal from "@/components/Modal";
 import {
   MODAL_TH,
   MODAL_TD,
-  POLICY_NAME_TD,
+  POLICY_NAME_WRAP_TD,
   PolicyStatementTableColgroup,
-  STATEMENT_REF_TD,
   STATEMENT_TEXT_TD,
 } from "@/components/policy-optimization/policyStatementModalTable";
 import type { PolicyOptimizationGrant } from "@/types/oci-policy";
@@ -17,23 +16,47 @@ function grantKey(grant: PolicyOptimizationGrant): string {
   return `${grant.policyName}::${grant.ref}`;
 }
 
+function dedupeGrants(grants: PolicyOptimizationGrant[]): PolicyOptimizationGrant[] {
+  const seen = new Set<string>();
+  return grants.filter((grant) => {
+    const key = grantKey(grant);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function grantsForModify(row: {
   redundantGrants?: PolicyOptimizationGrant[];
+  coveredBy?: PolicyOptimizationGrant[];
   policyName?: string;
   statement?: string;
   rawStatement?: string;
+  coveredByStatement?: string | null;
+  coveredByRaw?: string | null;
 }): PolicyOptimizationGrant[] {
-  if (row.redundantGrants?.length) return row.redundantGrants;
+  const combined = dedupeGrants([
+    ...(row.redundantGrants ?? []),
+    ...(row.coveredBy ?? []),
+  ]);
+  if (combined.length > 0) return combined;
+
+  const fallback: PolicyOptimizationGrant[] = [];
   if (row.policyName && row.rawStatement) {
-    return [
-      {
-        policyName: row.policyName,
-        ref: row.statement ?? "—",
-        raw: row.rawStatement,
-      },
-    ];
+    fallback.push({
+      policyName: row.policyName,
+      ref: row.statement ?? "—",
+      raw: row.rawStatement,
+    });
   }
-  return [];
+  if (row.policyName && row.coveredByRaw) {
+    fallback.push({
+      policyName: row.policyName,
+      ref: row.coveredByStatement ?? "—",
+      raw: row.coveredByRaw,
+    });
+  }
+  return dedupeGrants(fallback);
 }
 
 export function ModifyPolicyStatementsModal({
@@ -51,16 +74,28 @@ export function ModifyPolicyStatementsModal({
   const [pendingDelete, setPendingDelete] = useState<PolicyOptimizationGrant | null>(null);
   const [deleteComment, setDeleteComment] = useState("");
   const [deleteCommentError, setDeleteCommentError] = useState<string | null>(null);
+  const lastSyncedGrantsKeyRef = useRef("");
+
+  const initialGrantsKey = useMemo(
+    () => initialGrants.map((grant) => `${grantKey(grant)}::${grant.raw}`).join("|"),
+    [initialGrants]
+  );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      lastSyncedGrantsKeyRef.current = "";
+      return;
+    }
+    if (lastSyncedGrantsKeyRef.current === initialGrantsKey) return;
+
+    lastSyncedGrantsKeyRef.current = initialGrantsKey;
     setGrants(initialGrants);
     setEditingKey(null);
     setEditDraft("");
     setPendingDelete(null);
     setDeleteComment("");
     setDeleteCommentError(null);
-  }, [open, initialGrants]);
+  }, [open, initialGrants, initialGrantsKey]);
 
   const startEdit = (grant: PolicyOptimizationGrant) => {
     setPendingDelete(null);
@@ -134,14 +169,11 @@ export function ModifyPolicyStatementsModal({
       ) : (
         <div className="rounded-md border border-blue-100">
           <table className="w-full table-fixed border-collapse text-sm">
-            <PolicyStatementTableColgroup actionsWidth="4rem" />
+            <PolicyStatementTableColgroup actionsWidth="4rem" showStatementRef={false} />
             <thead>
               <tr>
                 <th scope="col" className={MODAL_TH}>
                   Policy
-                </th>
-                <th scope="col" className={MODAL_TH}>
-                  Statement
                 </th>
                 <th scope="col" className={MODAL_TH}>
                   Statement text
@@ -158,10 +190,7 @@ export function ModifyPolicyStatementsModal({
 
                 return (
                   <tr key={key}>
-                    <td className={POLICY_NAME_TD} title={grant.policyName}>
-                      {grant.policyName}
-                    </td>
-                    <td className={STATEMENT_REF_TD}>{grant.ref}</td>
+                    <td className={POLICY_NAME_WRAP_TD}>{grant.policyName}</td>
                     <td className={STATEMENT_TEXT_TD}>
                       {isEditing ? (
                         <textarea

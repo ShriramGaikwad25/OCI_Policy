@@ -353,6 +353,17 @@ export function sumPathResourceCounts(path: CompartmentTreeNode[]): number {
   );
 }
 
+export function selectTopCompartmentPaths(
+  paths: CompartmentTreeNode[][],
+  limit = 3
+): CompartmentTreeNode[][] {
+  if (limit <= 0 || paths.length <= limit) return paths;
+
+  return [...paths]
+    .sort((a, b) => sumPathResourceCounts(b) - sumPathResourceCounts(a))
+    .slice(0, limit);
+}
+
 export function formatCompartmentCount(count: number): string {
   if (count > 999_999) return `${(count / 1_000_000).toFixed(1)}M`;
   if (count > 999) return `${Math.round(count / 1000)}k`;

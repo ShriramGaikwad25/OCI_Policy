@@ -7,9 +7,8 @@ import { grantsForModify } from "@/components/policy-optimization/ModifyPolicySt
 import {
   MODAL_TH,
   MODAL_TD,
-  POLICY_NAME_TD,
+  POLICY_NAME_WRAP_TD,
   PolicyStatementTableColgroup,
-  STATEMENT_REF_TD,
   STATEMENT_TEXT_TD,
 } from "@/components/policy-optimization/policyStatementModalTable";
 import type { PolicyOptimizationGrant } from "@/types/oci-policy";
@@ -87,14 +86,11 @@ export function RemoveDuplicateStatementsModal({
       ) : (
         <div className="rounded-md border border-blue-100">
           <table className="w-full table-fixed border-collapse text-sm">
-            <PolicyStatementTableColgroup />
+            <PolicyStatementTableColgroup showStatementRef={false} />
             <thead>
               <tr>
                 <th scope="col" className={MODAL_TH}>
                   Policy
-                </th>
-                <th scope="col" className={MODAL_TH}>
-                  Statement
                 </th>
                 <th scope="col" className={MODAL_TH}>
                   Statement text
@@ -107,10 +103,7 @@ export function RemoveDuplicateStatementsModal({
             <tbody className="divide-y divide-gray-100">
               {grants.map((grant) => (
                 <tr key={grantKey(grant)}>
-                  <td className={POLICY_NAME_TD} title={grant.policyName}>
-                    {grant.policyName}
-                  </td>
-                  <td className={STATEMENT_REF_TD}>{grant.ref}</td>
+                  <td className={POLICY_NAME_WRAP_TD}>{grant.policyName}</td>
                   <td className={STATEMENT_TEXT_TD}>
                     <p className="m-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono text-xs leading-relaxed text-gray-700">
                       {grant.raw}

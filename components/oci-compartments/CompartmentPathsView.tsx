@@ -1,6 +1,6 @@
 "use client";
 
-import { collectCompartmentPaths } from "@/lib/compartments-api";
+import { collectCompartmentPaths, selectTopCompartmentPaths } from "@/lib/compartments-api";
 import type { CompartmentTreeNode } from "@/types/oci-compartments";
 import { CompartmentCountDisplay } from "@/components/oci-compartments/CompartmentCountBadge";
 import { ZoomPanViewport } from "@/components/oci-compartments/ZoomPanViewport";
@@ -48,7 +48,8 @@ function CompartmentPathColumn({
 }
 
 export function CompartmentPathsView({ root }: { root: CompartmentTreeNode | null }) {
-  const paths = root ? collectCompartmentPaths(root) : [];
+  const allPaths = root ? collectCompartmentPaths(root) : [];
+  const paths = selectTopCompartmentPaths(allPaths, 3);
 
   return (
     <ZoomPanViewport
@@ -60,7 +61,9 @@ export function CompartmentPathsView({ root }: { root: CompartmentTreeNode | nul
       fitKey={paths.map((path) => path.map((node) => node.id).join(">")).join("|")}
       footer={
         paths.length > 0
-          ? `${paths.length} paths · drag to pan · scroll to zoom`
+          ? allPaths.length > paths.length
+            ? `Top ${paths.length} of ${allPaths.length} paths by policy count · drag to pan · scroll to zoom`
+            : `${paths.length} paths · drag to pan · scroll to zoom`
           : undefined
       }
     >

@@ -225,11 +225,88 @@ function parseMemberItem(item: unknown, index: number): OciGroupMember | null {
   };
 }
 
+function parseCompartmentFromStatementText(text: string): string | undefined {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  if (!normalized) return undefined;
+
+  const whereIndex = normalized.search(/\s+where\s+/i);
+  const scopeSection = whereIndex >= 0 ? normalized.slice(0, whereIndex) : normalized;
+
+  const tenancyMatch = scopeSection.match(/\bin\s+tenancy\s*$/i);
+  if (tenancyMatch) return "tenancy";
+
+  const compartmentMatch = scopeSection.match(/\bin\s+compartment\s+(.+)$/i);
+  if (compartmentMatch?.[1]) return compartmentMatch[1].trim();
+
+  return undefined;
+}
+
+function readStatementCompartment(
+  item: Record<string, unknown>,
+  statementText?: string
+): string | undefined {
+  let compartmentName = readOptionalString(
+    item,
+    "compartmentName",
+    "compartment_name",
+    "location",
+    "scopeName",
+    "scope_name"
+  );
+
+  const compartmentValue = item.compartment ?? item.inCompartment ?? item.in_compartment;
+  if (!compartmentName && typeof compartmentValue === "string") {
+    compartmentName = compartmentValue.trim();
+  } else if (!compartmentName && isRecord(compartmentValue)) {
+    const name = readOptionalString(
+      compartmentValue,
+      "name",
+      "compartmentName",
+      "compartment_name",
+      "displayName",
+      "display_name"
+    );
+    const scope = readOptionalString(compartmentValue, "scope", "type")?.toUpperCase();
+    const ocid = readOptionalString(
+      compartmentValue,
+      "ocid",
+      "compartmentOcid",
+      "compartment_ocid",
+      "compartmentId",
+      "compartment_id"
+    );
+
+    if (name) {
+      compartmentName = name;
+    } else if (scope === "TENANCY" || ocid?.includes(".tenancy.")) {
+      compartmentName = "tenancy";
+    } else if (ocid) {
+      compartmentName = ocid;
+    }
+  }
+
+  const scope = readOptionalString(item, "scope", "scopeType", "scope_type")?.toUpperCase();
+  if (!compartmentName && scope === "TENANCY") {
+    compartmentName = "tenancy";
+  }
+
+  if (!compartmentName && statementText) {
+    compartmentName = parseCompartmentFromStatementText(statementText);
+  }
+
+  return compartmentName;
+}
+
 function parseStatementItem(item: unknown, index: number): OciGroupStatement | null {
   if (typeof item === "string") {
     const statement = item.trim();
     if (!statement) return null;
-    return { id: `statement-${index}`, statement };
+    const compartment = parseCompartmentFromStatementText(statement);
+    return {
+      id: `statement-${index}`,
+      statement,
+      ...(compartment ? { compartment } : {}),
+    };
   }
   if (!isRecord(item)) return null;
 
@@ -246,7 +323,7 @@ function parseStatementItem(item: unknown, index: number): OciGroupStatement | n
   const policyName = readOptionalString(item, "policyName", "policy", "policy_name");
   const verb = readOptionalString(item, "verb", "action");
   const resource = readOptionalString(item, "resource", "resourceType", "resource_type");
-  const compartment = readOptionalString(item, "compartment", "compartmentName", "compartment_name");
+  const compartment = readStatementCompartment(item, statement);
   const condition = readOptionalString(item, "condition", "whereClause", "where");
 
   if (!statement && !policyName && !verb && !resource) return null;

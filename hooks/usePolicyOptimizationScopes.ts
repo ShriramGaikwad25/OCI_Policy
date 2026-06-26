@@ -9,7 +9,7 @@ type PolicyScopesResponse = {
   message?: string;
 };
 
-async function fetchPolicyScopes(policyName: string): Promise<PolicyScopesResponse> {
+export async function fetchPolicyScopes(policyName: string): Promise<PolicyScopesResponse> {
   const res = await fetch(
     `/api/oci-policy-optimization/scopes/${encodeURIComponent(policyName)}`,
     { cache: "no-store" }

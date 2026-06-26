@@ -1,5 +1,6 @@
-import type { PolicyListStatement } from "@/types/oci-policy";
 import type {
+  PolicyListStatement,
+  PolicyOptimizationGrant,
   PolicyScopeCompartment,
   PolicyScopeDefinedTag,
   PolicyScopeFreeformTag,
@@ -516,6 +517,91 @@ export function resolveScopesStatementIndex(
 
 export function buildScopesStatementRef(policyName: string, statementIndex: number): string {
   return `${policyName.trim()}#${statementIndex}`;
+}
+
+function readStatementTextFromScopeRecord(record: Record<string, unknown>): string {
+  const textKeys = [
+    "raw",
+    "rawStatement",
+    "raw_statement",
+    "text",
+    "statement",
+    "statement_text",
+    "statementText",
+    "policyStatement",
+    "iamStatement",
+    "fullText",
+    "content",
+    "body",
+    "value",
+  ] as const;
+
+  const direct = readOptionalString(record, ...textKeys);
+  if (direct) return direct;
+
+  const nested = getField(record, "scope", "scopeDetails", "scope_details", "details", "data");
+  if (isRecord(nested)) {
+    return readOptionalString(nested, ...textKeys) ?? "";
+  }
+
+  return "";
+}
+
+function readGrantRefFromScopeRecord(
+  record: Record<string, unknown>,
+  policyName: string,
+  fallbackIndex: number
+): string {
+  const explicit = readOptionalString(record, "ref", "statementRef", "statement_ref");
+  if (explicit?.includes("#")) return explicit;
+
+  const index = readStatementIndex(record) ?? fallbackIndex;
+  if (explicit) {
+    const normalized = normalizeRef(explicit);
+    if (/^\d+$/.test(normalized)) {
+      return buildScopesStatementRef(policyName, Number(normalized));
+    }
+    return explicit;
+  }
+
+  return buildScopesStatementRef(policyName, index);
+}
+
+export function extractPolicyGrantsFromScopesPayload(
+  payload: unknown,
+  policyName: string
+): PolicyOptimizationGrant[] {
+  const scopes = unwrapScopesEnvelope(payload);
+  if (!scopes) return [];
+
+  const statements = isRecord(scopes)
+    ? getField(scopes, "statements", "statementScopes", "statement_scopes")
+    : null;
+
+  const records =
+    Array.isArray(statements) && statements.length > 0
+      ? statements.filter(isRecord)
+      : extractScopeRecords(scopes, policyName);
+
+  const trimmedPolicy = policyName.trim();
+  const policyLower = trimmedPolicy.toLowerCase();
+  const grants: PolicyOptimizationGrant[] = [];
+
+  records.forEach((record, index) => {
+    const recordPolicy = readOptionalString(record, "policyName", "policy_name");
+    if (recordPolicy && recordPolicy.toLowerCase() !== policyLower) return;
+
+    const raw = readStatementTextFromScopeRecord(record);
+    if (!raw) return;
+
+    grants.push({
+      policyName: recordPolicy ?? trimmedPolicy,
+      ref: readGrantRefFromScopeRecord(record, trimmedPolicy, index),
+      raw,
+    });
+  });
+
+  return grants;
 }
 
 function matchesPolicyName(record: Record<string, unknown>, policyName?: string): boolean {
