@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Check, Copy, FileCode2, Plus, X } from "lucide-react";
+import { Check, Copy, FileCode2, Loader2, Play, Plus, X } from "lucide-react";
+import { PolicyRecommendationResults } from "@/components/oci-policy-builder/PolicyRecommendationResults";
+import { DEFAULT_POLICY_RECOMMENDATION_NAME } from "@/lib/policy-recommendation-api";
 import {
   buildPreview,
   COND_VARS,
@@ -306,17 +308,19 @@ function StatCard({
 export default function OciPolicyBuilderPage() {
   const [scenario, setScenario] = useState<ScenarioId>("access");
   const [copied, setCopied] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationError, setSimulationError] = useState<string | null>(null);
+  const [simulationResult, setSimulationResult] = useState<unknown>(null);
+  const [simulationStatement, setSimulationStatement] = useState("");
 
   const [access, setAccess] = useState<AccessForm>({
     subjectType: "group",
-    subject: "NetworkAdmins",
-    verb: "manage",
-    resource: "virtual-network-family",
-    locType: "compartment",
+    subject: "'Default'/'kf-iam-export-readers'",
+    verb: "read",
+    resource: "groups",
+    locType: "tenancy",
     location: "Network:Prod",
-    conditions: [
-      { id: createId(), variable: "request.region", operator: "=", value: "us-ashburn-1" },
-    ],
+    conditions: [],
     combine: "all",
   });
 
@@ -379,6 +383,44 @@ export default function OciPolicyBuilderPage() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       /* clipboard unavailable */
+    }
+  }, [preview.text]);
+
+  const runSimulation = useCallback(async () => {
+    setIsSimulating(true);
+    setSimulationError(null);
+
+    try {
+      const res = await fetch("/api/oci-policy-recommendation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          policyName: DEFAULT_POLICY_RECOMMENDATION_NAME,
+          statement: preview.text,
+        }),
+      });
+
+      const payload = (await res.json().catch(() => null)) as
+        | { data?: unknown; result?: unknown; message?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(payload?.message ?? `Simulation failed (${res.status})`);
+      }
+
+      setSimulationStatement(preview.text);
+      setSimulationResult(payload?.data ?? payload);
+    } catch (error) {
+      setSimulationResult(null);
+      setSimulationStatement("");
+      setSimulationError(
+        error instanceof Error ? error.message : "Failed to simulate policy recommendation"
+      );
+    } finally {
+      setIsSimulating(false);
     }
   }, [preview.text]);
 
@@ -997,6 +1039,22 @@ export default function OciPolicyBuilderPage() {
             dangerouslySetInnerHTML={{ __html: highlighted }}
           />
 
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void runSimulation()}
+              disabled={isSimulating || !preview.text.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-purple-600 bg-purple-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSimulating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Play className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {isSimulating ? "Simulating…" : "Simulate"}
+            </button>
+          </div>
+
           <div className="mt-4 grid grid-cols-2 gap-3">
             <StatCard label="Statements produced" value={preview.count} accent={countAccent} />
             <StatCard label="Statements saved" value={preview.saved} accent={savedAccent} />
@@ -1024,6 +1082,30 @@ export default function OciPolicyBuilderPage() {
           </p>
         </div>
       </div>
+
+      {(isSimulating || simulationError || simulationResult != null) && (
+        <div className="mt-4 space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          {isSimulating && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Loader2 className="h-4 w-4 animate-spin text-purple-600" aria-hidden />
+              Running policy recommendation…
+            </div>
+          )}
+
+          {simulationError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {simulationError}
+            </div>
+          )}
+
+          {!isSimulating && !simulationError && simulationResult != null && (
+            <PolicyRecommendationResults
+              data={simulationResult}
+              statement={simulationStatement}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

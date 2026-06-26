@@ -39,6 +39,7 @@ export const INDIV = [
   "objects",
   "db-systems",
   "volumes",
+  "groups",
   "functions-function",
   "log-groups",
   "secret-family",
