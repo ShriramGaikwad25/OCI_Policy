@@ -13,6 +13,8 @@ import {
 } from "@/lib/tag-dashboard-api";
 import type { TagDashboardTagRow, TagDashboardTagResource } from "@/types/oci-policy";
 
+const SHOW_FREEFORM_TAGS = false;
+
 function SummaryStatBox({
   label,
   value,
@@ -366,7 +368,9 @@ function TagSections({
       {!isLoading && !isError && (
         <div className="flex flex-col gap-4">
           <TagSectionTable variant="defined" rows={definedRows} showNamespace />
-          <TagSectionTable variant="freeform" rows={freeformRows} showNamespace={false} />
+          {SHOW_FREEFORM_TAGS && (
+            <TagSectionTable variant="freeform" rows={freeformRows} showNamespace={false} />
+          )}
         </div>
       )}
     </div>
