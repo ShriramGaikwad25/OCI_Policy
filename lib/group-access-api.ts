@@ -384,6 +384,136 @@ function readNestedResourceCount(record: Record<string, unknown>): number | unde
   return readOptionalNumber(resourcesValue, "resourceCount", "resource_count", "count");
 }
 
+function countResources(record: Record<string, unknown>): number {
+  const nestedResourceCount = readNestedResourceCount(record);
+  if (nestedResourceCount != null) return nestedResourceCount;
+
+  const explicit = readOptionalNumber(
+    record,
+    "resourceCount",
+    "resource_count",
+    "resourcesCount",
+    "resources_count",
+    "totalResources",
+    "total_resources"
+  );
+  if (explicit != null) return explicit;
+
+  const resourcesValue = record.resources;
+  if (Array.isArray(resourcesValue)) return resourcesValue.length;
+
+  if (isRecord(resourcesValue)) {
+    const explicitNested = readOptionalNumber(
+      resourcesValue,
+      "resourceCount",
+      "resource_count",
+      "count"
+    );
+    if (explicitNested != null) return explicitNested;
+
+    let compartmentCount = 0;
+    for (const compartmentEntry of readNestedArray(resourcesValue, "compartments")) {
+      if (isRecord(compartmentEntry)) {
+        compartmentCount += readNestedArray(compartmentEntry, "resources").length;
+      }
+    }
+    if (compartmentCount > 0) return compartmentCount;
+  }
+
+  return countFromRecord(record, ["resourceItems", "resource_items", "items"], []);
+}
+
+function parseGroupAccessSummaryRecord(item: unknown): OciGroupAccessSummary | null {
+  if (!isRecord(item)) return null;
+
+  const nestedGroup = isRecord(item.group) ? item.group : null;
+  const metadataSource = nestedGroup ?? item;
+
+  const name =
+    readOptionalString(
+      metadataSource,
+      "name",
+      "groupName",
+      "group_name",
+      "displayName",
+      "display_name"
+    ) ?? "";
+  if (!name) return null;
+
+  const id =
+    readOptionalString(
+      metadataSource,
+      "ocid",
+      "id",
+      "groupId",
+      "group_id",
+      "groupOcid",
+      "group_ocid"
+    ) ?? name;
+
+  const description = readOptionalString(metadataSource, "description", "groupDescription");
+  const status = readOptionalString(metadataSource, "status", "lifecycleState", "state");
+  const tagSources: Record<string, unknown>[] = nestedGroup ? [nestedGroup, item] : [item];
+  const createdOn = readGroupCreatedOn(...tagSources);
+  const createdBy = readGroupCreatedBy(...tagSources);
+
+  const memberCount =
+    readOptionalNumber(
+      metadataSource,
+      "memberCount",
+      "member_count",
+      "membersCount",
+      "members_count",
+      "userCount",
+      "user_count"
+    ) ??
+    countFromRecord(
+      item,
+      ["members", "users", "groupMembers", "group_members", "memberList"],
+      []
+    );
+  const statementCount = countFromRecord(
+    item,
+    ["statements", "policyStatements", "policy_statements", "grants", "accessStatements"],
+    [
+      "statementCount",
+      "statement_count",
+      "statementsCount",
+      "statements_count",
+      "grantCount",
+      "grant_count",
+    ]
+  );
+  const resourceCount = countResources(item);
+
+  return {
+    id,
+    name,
+    ...(description ? { description } : {}),
+    ...(status ? { status } : {}),
+    ...(createdOn ? { createdOn } : {}),
+    ...(createdBy ? { createdBy } : {}),
+    memberCount,
+    statementCount,
+    resourceCount,
+  };
+}
+
+function mergeGroupAccessSummariesByName(
+  groups: OciGroupAccessSummary[]
+): OciGroupAccessSummary[] {
+  const seen = new Map<string, OciGroupAccessSummary>();
+  for (const group of groups) {
+    const key = group.name.toLowerCase();
+    if (!seen.has(key)) {
+      seen.set(key, group);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+}
+
 function parseGroupAccessRecord(item: unknown, index: number): OciGroupAccessDetail | null {
   if (!isRecord(item)) return null;
 
@@ -521,22 +651,10 @@ export function parseGroupAccessListResponse(payload: unknown): OciGroupAccessLi
     throw new Error("Group access API returned an unexpected response");
   }
 
-  const groups = mergeGroupAccessByName(
+  const groups = mergeGroupAccessSummariesByName(
     extractGroupAccessArray(payload)
-      .map((item, index) => parseGroupAccessRecord(item, index))
-      .filter((item): item is OciGroupAccessDetail => item !== null)
-  ).map(
-    (group): OciGroupAccessSummary => ({
-      id: group.id,
-      name: group.name,
-      description: group.description,
-      status: group.status,
-      createdOn: group.createdOn,
-      createdBy: group.createdBy,
-      memberCount: group.memberCount,
-      statementCount: group.statementCount,
-      resourceCount: group.resourceCount,
-    })
+      .map((item) => parseGroupAccessSummaryRecord(item))
+      .filter((item): item is OciGroupAccessSummary => item !== null)
   );
 
   return { groups };

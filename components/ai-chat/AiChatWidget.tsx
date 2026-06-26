@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 import { AiChatBotIcon } from "@/components/ai-chat/AiChatBotIcon";
+import { getUserFacingChatError } from "@/lib/ai-chat-api";
 
 type ChatMessage = {
   id: string;
@@ -23,10 +24,19 @@ function resizeTextarea(element: HTMLTextAreaElement | null) {
   element.style.height = `${Math.min(element.scrollHeight, 120)}px`;
 }
 
+type ChatApiResponse = {
+  conversation_id?: string;
+  reply?: string;
+  message?: string;
+  suppressed?: boolean;
+};
+
 export default function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -42,9 +52,9 @@ export default function AiChatWidget() {
     resizeTextarea(event.target);
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || isSending) return;
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -52,17 +62,68 @@ export default function AiChatWidget() {
       content: trimmed,
     };
 
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-      {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: "Coming soon — the AI assistant will be available shortly.",
-      },
-    ]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsSending(true);
     requestAnimationFrame(() => resizeTextarea(inputRef.current));
+
+    try {
+      const payload: { message: string; conversation_id?: string } = {
+        message: trimmed,
+      };
+      if (conversationId) {
+        payload.conversation_id = conversationId;
+      }
+
+      const res = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await res.json()) as ChatApiResponse;
+      if (!res.ok) {
+        if (data.suppressed) return;
+        const userMessage = getUserFacingChatError(
+          data.message ?? `Chat request failed (${res.status})`
+        );
+        if (!userMessage) return;
+        throw new Error(userMessage);
+      }
+
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id);
+      }
+
+      const reply = data.reply?.trim();
+      if (!reply) {
+        throw new Error("The assistant returned an empty response.");
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: reply,
+        },
+      ]);
+    } catch (error) {
+      const rawMessage =
+        error instanceof Error ? error.message : "Something went wrong. Please try again.";
+      const userMessage = getUserFacingChatError(rawMessage);
+      if (!userMessage) return;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: userMessage,
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -120,6 +181,13 @@ export default function AiChatWidget() {
                   </li>
                 );
               })}
+              {isSending && (
+                <li className="flex justify-start">
+                  <div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-500 shadow-sm">
+                    Thinking...
+                  </div>
+                </li>
+              )}
             </ul>
             <div ref={messagesEndRef} />
           </div>
@@ -139,7 +207,7 @@ export default function AiChatWidget() {
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={!input.trim()}
+                disabled={!input.trim() || isSending}
                 className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
                 aria-label="Send message"
               >
