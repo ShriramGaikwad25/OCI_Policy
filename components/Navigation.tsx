@@ -69,13 +69,15 @@ export function Navigation() {
     routeMatchesExact(subItem.href);
 
   useEffect(() => {
-    const ociItem = navigation.find((i) => i.name === "OCI Policy Dashboard");
-    if (
-      ociItem?.subItems?.length &&
-      (routeMatches(ociItem.href) ||
-        ociItem.subItems.some((s) => routeMatches(s.href)))
-    ) {
-      setExpandedItems(new Set(["OCI Policy Dashboard"]));
+    for (const item of navigation) {
+      if (
+        item.subItems?.length &&
+        (routeMatches(item.href) ||
+          item.subItems.some((s) => routeMatches(s.href)))
+      ) {
+        setExpandedItems(new Set([item.name]));
+        break;
+      }
     }
   }, [pathname]);
 
@@ -97,6 +99,7 @@ export function Navigation() {
     const groupAccessDetailPattern = /^\/oci-policy-analysis\/group-access\/[^/]+$/;
     const compartmentsTreePath = "/oci-policy-analysis/compartments";
     const groupAccessHref = "/oci-policy-analysis/group-access";
+    const guardrailsHref = "/oci-policy-risk-management/guardrails";
 
     if (policyGraphPattern.test(path)) {
       return { href: dashboardHref, label: "Back to Policy Dashboard" };
@@ -117,6 +120,13 @@ export function Navigation() {
       return { href: dashboardHref, label: "Back to Policies" };
     }
 
+    if (
+      path === "/oci-policy-risk-management/risk-remediation" &&
+      searchParams.has("guardrail")
+    ) {
+      return { href: guardrailsHref, label: "Back to Guardrails" };
+    }
+
     const tenant = parseTenantFromPathname(path);
     if (tenant) {
       const suffix = path.slice(`/${tenant}`.length);
@@ -134,6 +144,12 @@ export function Navigation() {
         suffix === "/oci-policy-analysis/all-findings"
       ) {
         return { href: `/${tenant}${dashboardHref}`, label: "Back to Policies" };
+      }
+      if (
+        suffix === "/oci-policy-risk-management/risk-remediation" &&
+        searchParams.has("guardrail")
+      ) {
+        return { href: `/${tenant}${guardrailsHref}`, label: "Back to Guardrails" };
       }
     }
 

@@ -1,4 +1,15 @@
-import { FileCode2, LayoutDashboard, Shield, Tags, Target, Users } from "lucide-react";
+import {
+  Building2,
+  FileCode2,
+  LayoutDashboard,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Tags,
+  Target,
+  Users,
+  Wrench,
+} from "lucide-react";
 
 export interface NavItem {
   name: string;
@@ -38,6 +49,33 @@ export const navLinks: NavItem[] = [
         name: "Policy Builder",
         href: "/oci-policy-analysis/policy-builder",
         icon: FileCode2,
+      },
+    ],
+  },
+  {
+    name: "OCI Policy Risk Management",
+    href: "/oci-policy-risk-management",
+    icon: ShieldAlert,
+    subItems: [
+      {
+        name: "Overview",
+        href: "/oci-policy-risk-management",
+        icon: LayoutDashboard,
+      },
+      {
+        name: "Tenant Posture",
+        href: "/oci-policy-risk-management/tenant-posture",
+        icon: Building2,
+      },
+      {
+        name: "Guardrails",
+        href: "/oci-policy-risk-management/guardrails",
+        icon: ShieldCheck,
+      },
+      {
+        name: "Risk Remediation",
+        href: "/oci-policy-risk-management/risk-remediation",
+        icon: Wrench,
       },
     ],
   },

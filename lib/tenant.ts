@@ -11,6 +11,7 @@ const RESERVED_FIRST_SEGMENTS = new Set(
     'api',
     '_next',
     'oci-policy-analysis',
+    'oci-policy-risk-management',
   ].map((s) => s.toLowerCase())
 );
 
